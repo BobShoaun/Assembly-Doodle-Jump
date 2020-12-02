@@ -22,53 +22,117 @@ main:
 	
 	jal drawBackground
 	
-	li $a1, 2624
-	jal drawPlatform
-	li $a1, 2088
-	jal drawPlatform
 	
-	lw $t0, doodlerStartPos
-	li $s0, 0
+	lw $a0, doodlerStartPos
+	jal startJump
 	
 	gameLoop:
-		add $s1, $s0, $t0
-		move $a1, $s1
+		li $a1, 2644
+		jal drawPlatform
+		li $a1, 2352
+		jal drawPlatform
+		li $a1, 3392
+		jal drawPlatform
+	
+		move $a1, $v1
+		
 		move $a2, $t2
 		jal drawDoodler
 		
-		beq $s0, -640, down
-		addi $s0, $s0, -128
-		j endif
-		down:
-			addi $s0, $s0, 128
-		
-		endif:
+		jal updateJump
 		jal sleep
 		
 		move $a2, $t1
 		jal drawDoodler
-		
+
 		j gameLoop
 		
 	exitGameLoop:
 	
 	li $v0, 10 # terminate the program gracefully
 	syscall
-	
 
-# Draw doodler from $a1 coords and $a2 color
-drawDoodler:
+# $a0 start pos
+startJump:
 	addi $sp, $sp, -4
 	sw $ra, ($sp)
 	
-	add $t6, $gp, $a1
-	sw $a2, 4($t6)
-	sw $a2, 128($t6)
-	sw $a2, 132($t6)
-	sw $a2, 136($t6)
-	sw $a2, 256($t6)
-	sw $a2, 264($t6)
+	move $s0, $a0
+	li $s1, -128 # direction
+	li $s2, 0 # offset
+	move $v1, $s0
 	
+	lw $ra, ($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
+# $v1 current pos
+updateJump:
+	addi $sp, $sp, -4
+	sw $ra, ($sp)
+	
+	move $a0, $v1
+	jal checkDoodlerCollision
+	
+	bne $t5, 1, cont2
+	bne $s1, 128, cont2
+	addi $a0, $v1, -128
+	jal startJump
+	
+	cont2:
+	bne $s2, -1152, cont # peak
+	li $s1, 128
+	
+	cont:
+	add $v1, $s2, $s0
+	add $s2, $s2, $s1
+	j end
+	
+	end:
+	lw $ra, ($sp)
+	addi $sp, $sp, 4
+	jr $ra
+	
+# a0 doodler pos, t5 collided
+checkDoodlerCollision:
+	addi $sp, $sp, -12
+	sw $ra, 0($sp)
+	sw $s0, 4($sp)
+	sw $s1, 8($sp)
+	
+	add $s0, $gp, $a0
+	lw $s1, 384($s0)
+	beq $s1, $t3, collided
+	lw $s1, 392($s0)
+	beq $s1, $t3, collided
+	li $t5, 0
+	j endC
+	collided:
+		li $t5, 1
+	
+	endC:
+	lw $s1, 8($sp)
+	lw $s0, 4($sp)
+	lw $ra, 0($sp)
+	addi $sp, $sp, 12
+	jr $ra
+	
+
+# Draw doodler from $a1 pos and $a2 color
+drawDoodler:
+	addi $sp, $sp, -4
+	sw $ra, ($sp)
+	sw $s0, 4($sp)
+	
+	add $s0, $gp, $a1
+	sw $a2, 4($s0)
+	sw $a2, 128($s0)
+	sw $a2, 132($s0)
+	sw $a2, 136($s0)
+	sw $a2, 256($s0)
+	sw $a2, 264($s0)
+	
+	lw $s0, 4($sp)
 	lw $ra, ($sp)
 	addi $sp, $sp, 4
 	jr $ra
@@ -76,20 +140,21 @@ drawDoodler:
 drawPlatform:
 	addi $sp, $sp, -4
 	sw $ra, ($sp)
+	sw $s0, 4($sp)
 	
-	add $t4, $gp, $a1
-	sw $t3, ($t4)
-	sw $t3, 4($t4)
-	sw $t3, 8($t4)
-	sw $t3, 12($t4)
-	sw $t3, 16($t4)
+	add $s0, $gp, $a1
+	sw $t3, ($s0)
+	sw $t3, 4($s0)
+	sw $t3, 8($s0)
+	sw $t3, 12($s0)
+	sw $t3, 16($s0)
 	
+	lw $s0, 4($sp)
 	lw $ra, ($sp)
 	addi $sp, $sp, 4
 	jr $ra
 
 drawBackground:
-	addi $sp, $sp, -4
 	sw $ra, ($sp)
 	
 	li $t4, 0
@@ -103,7 +168,6 @@ drawBackground:
 	exitBgDrawLoop:
 	
 	lw $ra, ($sp)
-	addi $sp, $sp, 4
 	jr $ra
 	
 sleep:
