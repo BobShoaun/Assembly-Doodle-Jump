@@ -1,4 +1,9 @@
-# Demo for painting
+#####################################################################
+#
+# CSC258H5S Fall 2020 Assembly Final Project
+# University of Toronto, St. George
+#
+# Student: Ng Bob Shoaun, 1006568992
 #
 # Bitmap Display Configuration:
 # - Unit width in pixels: 8
@@ -7,6 +12,21 @@
 # - Display height in pixels: 256
 # - Base Address for Display: 0x10008000 ($gp)
 #
+# Which milestone is reached in this submission? 1
+# (See the assignment handout for descriptions of the milestones)
+# - Milestone 1/2/3/4/5 (choose the one the applies)
+#
+# Which approved additional features have been implemented?
+# (See the assignment handout for the list of additional features)
+# 1. Doodler jump animation
+# 2. Platforms
+# 3. (fill in the feature, if any)
+# ... (add more if necessary)
+#
+# Any additional information that the TA needs to know:
+# - (write here, if any)
+#
+#####################################################################
 .data
 	max: .word 4092
 	sleepDuration: .word 100
@@ -18,7 +38,7 @@
 main:
 	lw $t1, bgColor
 	lw $t2, doodlerColor
-	lw $t3, platformColor
+	lw $t3, platformColor            
 	
 	jal drawBackground
 	
