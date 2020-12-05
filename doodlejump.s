@@ -29,7 +29,8 @@
 #####################################################################
 .data
 	displayMaximum: .word 4096
-	platformsArray: .space 32
+	platformsArray: .space 36
+	platformsArrayLength: .word 36
 	sleepDuration: .word 50
 	doodlerColor: .word 0x7FFF90
 	backgroundColor: .word 0xFFDFA8
@@ -49,6 +50,7 @@ main:
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
+	lw $t3, displayMaximum
 
 	gameLoop:
 		# erase old platforms
@@ -73,6 +75,8 @@ main:
 		lw $a1, doodlerColor
 		jal drawDoodler
 		
+		bgt $t0, $t3, endGameLoop
+		
 		jal sleep
 		j gameLoop
 		
@@ -81,23 +85,28 @@ main:
 		syscall
 
 moveWorld:
-	addi $sp, $sp, -12
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	sw $s2, 8($sp)
+	addi $sp, $sp, -20
+	sw $ra, ($sp)
+	sw $s0, 4($sp)
+	sw $s1, 8($sp)
+	sw $s2, 12($sp)
+	sw $s3, 16($sp)
 	
 	bge $t0, 1536, endMoveWorld
 	addi $t0, $t0, 128
 	
+	lw $s3, platformsArrayLength
 	li $s0, 0
 	movePlatforms:
-		beq $s0, 32, endMoveWorld
+		beq $s0, $s3, endMoveWorld
 		lw $s1, platformsArray($s0)
 		addi $s1, $s1, 128
 		
 		lw $s2, displayMaximum
-		blt $s1, $s2, contMovePlatforms
-		addi $s1, $s1, -4096
+		ble $s1, $s2, contMovePlatforms
+
+		jal getRandomPlatformPosition
+		move $s1, $v0
 			
 		contMovePlatforms:
 			sw $s1, platformsArray($s0)
@@ -105,10 +114,12 @@ moveWorld:
 			j movePlatforms
 	
 	endMoveWorld:
-		lw $s2, 8($sp)
-		lw $s1, 4($sp)
-		lw $s0, ($sp)
-		addi $sp, $sp, 12
+		lw $s3, 16($sp)
+		lw $s2, 12($sp)
+		lw $s1, 8($sp)
+		lw $s0, 4($sp)
+		lw $ra, ($sp)
+		addi $sp, $sp, 20
 		jr $ra
 
 moveDoodler:
@@ -178,11 +189,11 @@ checkKeyboardInput:
 		j endCKI
 	
 	jPressed:
-		addi $t1, $t1, -4
+		addi $t1, $t1, -8
 		j endCKI
 	
 	kPressed:
-		addi $t1, $t1, 4
+		addi $t1, $t1, 8
 	
 	endCKI:
 		lw $s1, 4($sp)
@@ -209,23 +220,21 @@ drawDoodler:
 	jr $ra
 	
 spawnPlatforms:
-	addi $sp, $sp, -8
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
+	addi $sp, $sp, -16
+	sw $ra, ($sp)
+	sw $s0, 4($sp)
+	sw $s1, 8($sp)
+	sw $s2, 12($sp)
 	
+	lw $s2, platformsArrayLength
 	li $s0, 0
 	spawnPlatform:
-		beq $s0, 32, endSpawnPlatform
+		beq $s0, $s2, endSpawnPlatform
 		
-		li $v0, 42
-		li $a0, 0
-		li $a1, 128
-		syscall
-		
-		mul $a0, $a0, 4
+		jal getRandomPlatformPosition
+			
 		mul $s1, $s0, 128
-		
-		add $s1, $s1, $a0
+		add $s1, $s1, $v0	# apply offset
 		
 		sw $s1, platformsArray($s0)
 		
@@ -233,20 +242,34 @@ spawnPlatforms:
 		j spawnPlatform
 	
 	endSpawnPlatform:
-		lw $s1, 4($sp)
-		lw $s0, ($sp)
-		addi $sp, $sp, 8
+		lw $s2, 12($sp)
+		lw $s1, 8($sp)
+		lw $s0, 4($sp)
+		lw $ra, ($sp)
+		addi $sp, $sp, 16
 		jr $ra
+
+# $v0 random platform position off screen
+getRandomPlatformPosition:
+	li $v0, 42
+	li $a0, 0
+	li $a1, 128
+	syscall
+	
+	mul $v0, $a0, -4
+	jr $ra
 
 # Draw platforms with $a0 color
 drawPlatforms:	
-	addi $sp, $sp, -8
+	addi $sp, $sp, -12
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
+	sw $s2, 8($sp)
 	
+	lw $s2, platformsArrayLength
 	li $s0, 0
 	drawPlatform:
-		beq $s0, 32, endDrawPlatform
+		beq $s0, $s2, endDrawPlatform
 		lw $s1, platformsArray($s0)
 		add $s1, $s1, $gp
 		
@@ -260,9 +283,10 @@ drawPlatforms:
 		j drawPlatform
 	
 	endDrawPlatform:
+		lw $s2, 8($sp)
 		lw $s1, 4($sp)
 		lw $s0, ($sp)
-		addi $sp, $sp, 8
+		addi $sp, $sp, 12
 		jr $ra
 
 # Draw background with $a0 color
