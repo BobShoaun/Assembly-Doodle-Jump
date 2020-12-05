@@ -29,13 +29,13 @@
 #####################################################################
 .data
 	displayMaximum: .word 4096
-	platformsArray: .space 40
-	sleepDuration: .word 100
+	platformsArray: .space 32
+	sleepDuration: .word 50
 	doodlerColor: .word 0x7FFF90
 	backgroundColor: .word 0xFFDFA8
 	platformColor: .word 0xFF8A33
 	doodlerInitialPosition: .word 64
-	doodlerJumpDuration: .word 10	# jump duration in frames
+	doodlerJumpDuration: .word 12	# jump duration in frames
 	
 .text
 main:
@@ -49,7 +49,6 @@ main:
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
-	li $t3, 4096			# last collide position
 
 	gameLoop:
 		# erase old platforms
@@ -87,13 +86,12 @@ moveWorld:
 	sw $s1, 4($sp)
 	sw $s2, 8($sp)
 	
-	bge $t3, 3200, endMoveWorld
-	addi $t3, $t3, 128
+	bge $t0, 1536, endMoveWorld
 	addi $t0, $t0, 128
 	
 	li $s0, 0
 	movePlatforms:
-		beq $s0, 40, endMoveWorld
+		beq $s0, 32, endMoveWorld
 		lw $s1, platformsArray($s0)
 		addi $s1, $s1, 128
 		
@@ -155,15 +153,13 @@ checkDoodlerCollision:
 	collided:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, doodlerJumpDuration	# start/reset jump
-		move $t3, $t0
 	
 	endCollided:
-	
-	sw $s2, 8($sp)
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 12
-	jr $ra
+		sw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
 
 
 checkKeyboardInput:
@@ -189,10 +185,10 @@ checkKeyboardInput:
 		addi $t1, $t1, 4
 	
 	endCKI:
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 8
-	jr $ra
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 8
+		jr $ra
 	
 
 # Draw doodler at $a0 position with $a1 color
@@ -213,25 +209,33 @@ drawDoodler:
 	jr $ra
 	
 spawnPlatforms:
-	addi $sp, $sp, -4
+	addi $sp, $sp, -8
 	sw $s0, ($sp)
+	sw $s1, 4($sp)
 	
 	li $s0, 0
 	spawnPlatform:
-		beq $s0, 40, endSpawnPlatform
+		beq $s0, 32, endSpawnPlatform
+		
 		li $v0, 42
 		li $a0, 0
-		li $a1, 1024
+		li $a1, 128
 		syscall
-		mul $a0, $a0, 4
 		
-		sw $a0, platformsArray($s0)
+		mul $a0, $a0, 4
+		mul $s1, $s0, 128
+		
+		add $s1, $s1, $a0
+		
+		sw $s1, platformsArray($s0)
+		
 		addi $s0, $s0, 4
 		j spawnPlatform
 	
 	endSpawnPlatform:
+		lw $s1, 4($sp)
 		lw $s0, ($sp)
-		addi $sp, $sp, 4
+		addi $sp, $sp, 8
 		jr $ra
 
 # Draw platforms with $a0 color
@@ -242,7 +246,7 @@ drawPlatforms:
 	
 	li $s0, 0
 	drawPlatform:
-		beq $s0, 40, endDrawPlatform
+		beq $s0, 32, endDrawPlatform
 		lw $s1, platformsArray($s0)
 		add $s1, $s1, $gp
 		
@@ -269,22 +273,21 @@ drawBackground:
 	
 	li $s0, 0
 	bgDrawLoop:
-		beq $s0, 4096, exitBgDrawLoop
+		beq $s0, 4096, endBgDraw
 		add $s1, $s0, $gp
 		sw $a0, ($s1)
+		
 		addi $s0, $s0, 4
 		j bgDrawLoop
 	
-	exitBgDrawLoop:
-	
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 8
-	jr $ra
-	
+	endBgDraw:
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 8
+		jr $ra
+		
 sleep:	
 	li $v0, 32
 	lw $a0, sleepDuration
 	syscall
-
 	jr $ra
