@@ -31,6 +31,7 @@
 	displayMaximum: .word 4096
 	platformsArray: .space 36
 	platformsArrayLength: .word 36
+	spring: .word 0
 	sleepDuration: .word 50
 	doodlerColor: .word 0x7FFF90
 	backgroundColor: .word 0xFFDFA8
@@ -63,11 +64,19 @@ main:
 		lw $a1, backgroundColor
 		jal drawDoodler
 		
+		# erase old spring
+		lw $a0, backgroundColor
+		jal drawSpring
+		
 		jal moveWorld
 		
 		# draw platforms
 		lw $a0, platformColor
 		jal drawPlatforms
+		
+		# draw spring
+		lw $a0, springColor
+		jal drawSpring
 		
 		jal moveDoodler
 		
@@ -96,6 +105,12 @@ moveWorld:
 	bge $t0, 1536, endMoveWorld
 	addi $t0, $t0, 128
 	
+	# move spring
+	lw $s4, spring
+	addi $s4, $s4, 128
+	sw $s4, spring
+	
+	# move platforms
 	lw $s3, platformsArrayLength
 	li $s0, 0
 	movePlatforms:
@@ -149,29 +164,45 @@ moveDoodler:
 		jr $ra
 	
 checkDoodlerCollision:
-	addi $sp, $sp, -12
+	addi $sp, $sp, -16
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	sw $s2, 8($sp)
+	sw $s3, 12($sp)
 	
 	lw $s2, platformColor
+	lw $s3, springColor
 	
 	add $s0, $gp, $t0
 	lw $s1, 384($s0)	# left foot
-	beq $s1, $s2, collided  # left foot collided
+	beq $s1, $s2, platformCollided
+	beq $s1, $s3, springCollided
+	
+	lw $s1, 388($s0)	# middle
+	beq $s1, $s2, platformCollided
+	beq $s1, $s3, springCollided
+	
 	lw $s1, 392($s0)	# right foot
-	beq $s1, $s2, collided  # right foot collided
+	beq $s1, $s2, platformCollided 
+	beq $s1, $s3, springCollided
 	j endCollided
 	
-	collided:
+	platformCollided:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, doodlerJumpDuration	# start/reset jump
+		j endCollided
+	
+	springCollided:
+		addi $t1, $t1, -128		# cancel gravity
+		li $t2, 30			# start jump with higher duration
+		j endCollided
 	
 	endCollided:
-		sw $s2, 8($sp)
+		lw $s3, 12($sp)
+		lw $s2, 8($sp)
 		lw $s1, 4($sp)
 		lw $s0, ($sp)
-		addi $sp, $sp, 12
+		addi $sp, $sp, 16
 		jr $ra
 
 
@@ -231,7 +262,7 @@ spawnPlatforms:
 	lw $s2, platformsArrayLength
 	li $s0, 0
 	spawn:
-		beq $s0, $s2, endSpawnPlatform
+		beq $s0, $s2, endSpawnPlatforms
 		
 		# spawn indiv platform
 		mul $a0, $s0, 128
@@ -241,7 +272,7 @@ spawnPlatforms:
 		addi $s0, $s0, 4
 		j spawn
 	
-	endSpawnPlatform:
+	endSpawnPlatforms:
 		lw $s2, 12($sp)
 		lw $s1, 8($sp)
 		lw $s0, 4($sp)
@@ -251,34 +282,55 @@ spawnPlatforms:
 
 # Spawn platform at $a0 offset, $a1 index
 spawnPlatform:
-	addi $sp, $sp, -12
+	addi $sp, $sp, -16
 	sw $a0, ($sp)
 	sw $a1, 4($sp)
 	sw $s0, 8($sp)
+	sw $s1, 12($sp)
 	
 	li $v0, 42
 	li $a0, 0
 	li $a1, 128
 	syscall
 	
-	mul $s0, $a0, -4
+	mul $s0, $a0, -4	# coord form
 	
-	#li $v0, 42
-	#li $a0, 0
-	#li $a1, 1
-	#syscall
+	li $v0, 42
+	li $a0, 0
+	li $a1, 10
+	syscall
 	
-	#beq $a0, $zero, spawnSpring
-	
-	
+	move $s1, $a0
 	lw $a0, ($sp)
 	lw $a1, 4($sp)
+	add $s0, $s0, $a0 # apply offset
 	
-	add $s0, $s0, $a0	# apply offset
-	sw $s0, platformsArray($a1)
+	beq $s1, $zero, spawnSpring
+	j endSpawnPlatform
 	
-	lw $s0, 8($sp)
-	addi $sp, $sp, 12
+	spawnSpring:
+		addi $s1, $s0, -128
+		sw $s1, spring
+	
+	endSpawnPlatform:
+		sw $s0, platformsArray($a1)
+	
+		lw $s1, 12($sp)
+		lw $s0, 8($sp)
+		addi $sp, $sp, 16
+		jr $ra
+
+# draw spring with $a0 color
+drawSpring:
+	addi $sp, $sp, 4
+	sw $s0, ($sp)
+	
+	lw $s0, spring
+	add $s0, $s0, $gp
+	sw $a0, ($s0)
+	
+	lw $s0, ($sp)
+	addi $sp, $sp, -4
 	jr $ra
 
 # Draw platforms with $a0 color
