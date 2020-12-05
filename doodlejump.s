@@ -35,6 +35,7 @@
 	doodlerColor: .word 0x7FFF90
 	backgroundColor: .word 0xFFDFA8
 	platformColor: .word 0xFF8A33
+	springColor: .word 0x7E7E7E
 	doodlerInitialPosition: .word 64
 	doodlerJumpDuration: .word 12	# jump duration in frames
 	
@@ -75,7 +76,7 @@ main:
 		lw $a1, doodlerColor
 		jal drawDoodler
 		
-		bgt $t0, $t3, endGameLoop
+		bgt $t0, $t3, endGameLoop	# doodler reaches bottom of screen
 		
 		jal sleep
 		j gameLoop
@@ -101,15 +102,16 @@ moveWorld:
 		beq $s0, $s3, endMoveWorld
 		lw $s1, platformsArray($s0)
 		addi $s1, $s1, 128
+		sw $s1, platformsArray($s0)
 		
 		lw $s2, displayMaximum
 		ble $s1, $s2, contMovePlatforms
-
-		jal getRandomPlatformPosition
-		move $s1, $v0
+		
+		li $a0, 0
+		move $a1, $s0
+		jal spawnPlatform
 			
 		contMovePlatforms:
-			sw $s1, platformsArray($s0)
 			addi $s0, $s0, 4
 			j movePlatforms
 	
@@ -228,18 +230,16 @@ spawnPlatforms:
 	
 	lw $s2, platformsArrayLength
 	li $s0, 0
-	spawnPlatform:
+	spawn:
 		beq $s0, $s2, endSpawnPlatform
 		
-		jal getRandomPlatformPosition
-			
-		mul $s1, $s0, 128
-		add $s1, $s1, $v0	# apply offset
-		
-		sw $s1, platformsArray($s0)
+		# spawn indiv platform
+		mul $a0, $s0, 128
+		move $a1, $s0
+		jal spawnPlatform
 		
 		addi $s0, $s0, 4
-		j spawnPlatform
+		j spawn
 	
 	endSpawnPlatform:
 		lw $s2, 12($sp)
@@ -249,14 +249,36 @@ spawnPlatforms:
 		addi $sp, $sp, 16
 		jr $ra
 
-# $v0 random platform position off screen
-getRandomPlatformPosition:
+# Spawn platform at $a0 offset, $a1 index
+spawnPlatform:
+	addi $sp, $sp, -12
+	sw $a0, ($sp)
+	sw $a1, 4($sp)
+	sw $s0, 8($sp)
+	
 	li $v0, 42
 	li $a0, 0
 	li $a1, 128
 	syscall
 	
-	mul $v0, $a0, -4
+	mul $s0, $a0, -4
+	
+	#li $v0, 42
+	#li $a0, 0
+	#li $a1, 1
+	#syscall
+	
+	#beq $a0, $zero, spawnSpring
+	
+	
+	lw $a0, ($sp)
+	lw $a1, 4($sp)
+	
+	add $s0, $s0, $a0	# apply offset
+	sw $s0, platformsArray($a1)
+	
+	lw $s0, 8($sp)
+	addi $sp, $sp, 12
 	jr $ra
 
 # Draw platforms with $a0 color
