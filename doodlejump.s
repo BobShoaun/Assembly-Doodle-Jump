@@ -31,39 +31,38 @@
 	max: .word 4092
 	sleepDuration: .word 100
 	doodlerColor: .word 0x7FFF90
-	bgColor: .word 0xFFDFA8
+	backgroundColor: .word 0xFFDFA8
 	platformColor: .word 0xFF8A33
-	doodlerStartPos: .word 3648
+	doodlerInitialPosition: .word 64
+	doodlerJumpHeight: .word -1152
+	doodlerJumpDuration: .word 8	# jump duration in frames
 .text
 main:
-	lw $t1, bgColor
-	lw $t2, doodlerColor
-	lw $t3, platformColor            
-	
+	# paint background
+	lw $a0, backgroundColor
 	jal drawBackground
 	
-	
-	lw $a0, doodlerStartPos
-	jal startJump
-	
+	lw $t0, doodlerInitialPosition  # doodler current position
+	li $t1, 0 			# doodler velocity
+	li $t2, 0			# jump timer
+
 	gameLoop:
-		li $a1, 2644
-		jal drawPlatform
-		li $a1, 2352
-		jal drawPlatform
-		li $a1, 3392
-		jal drawPlatform
-	
-		move $a1, $v1
-		
-		move $a2, $t2
+		# erase old doodler
+		move $a0, $t0
+		lw $a1, backgroundColor
 		jal drawDoodler
 		
-		jal updateJump
+		jal spawnPlatforms
+		
+		jal moveDoodler
+		
+		# draw doodler
+		move $a0, $t0
+		lw $a1, doodlerColor
+		jal drawDoodler
+		
+
 		jal sleep
-		
-		move $a2, $t1
-		jal drawDoodler
 
 		j gameLoop
 		
@@ -72,126 +71,161 @@ main:
 	li $v0, 10 # terminate the program gracefully
 	syscall
 
-# $a0 start pos
-startJump:
-	addi $sp, $sp, -4
-	sw $ra, ($sp)
-	
-	move $s0, $a0
-	li $s1, -128 # direction
-	li $s2, 0 # offset
-	move $v1, $s0
-	
-	lw $ra, ($sp)
-	addi $sp, $sp, 4
-	jr $ra
 
-# $v1 current pos
-updateJump:
+moveDoodler:
 	addi $sp, $sp, -4
 	sw $ra, ($sp)
 	
-	move $a0, $v1
+	li $t1, 0	# reset velocity
+	jal checkKeyboardInput
+	
+	bne $t2, $zero, jumping
+	addi $t1, $t1, 128	# apply gravity
+	
 	jal checkDoodlerCollision
+	j endMoveDoodler
 	
-	bne $t5, 1, cont2
-	bne $s1, 128, cont2
-	addi $a0, $v1, -128
-	jal startJump
+	jumping:
+		addi $t1, $t1, -128
+		addi $t2, $t2, -1
 	
-	cont2:
-	bne $s2, -1152, cont # peak
-	li $s1, 128
+	endMoveDoodler:
+	add $t0, $t0, $t1	# move doodler based on velocity
 	
-	cont:
-	add $v1, $s2, $s0
-	add $s2, $s2, $s1
-	j end
-	
-	end:
 	lw $ra, ($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-# a0 doodler pos, t5 collided
 checkDoodlerCollision:
 	addi $sp, $sp, -12
-	sw $ra, 0($sp)
-	sw $s0, 4($sp)
-	sw $s1, 8($sp)
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
 	
-	add $s0, $gp, $a0
-	lw $s1, 384($s0)
-	beq $s1, $t3, collided
-	lw $s1, 392($s0)
-	beq $s1, $t3, collided
-	li $t5, 0
-	j endC
+	lw $s2, platformColor
+	
+	add $s0, $gp, $t0
+	lw $s1, 384($s0)	# left foot
+	beq $s1, $s2, collided  # left foot collided
+	lw $s1, 392($s0)	# right foot
+	beq $s1, $s2, collided  # right foot collided
+	j endCollided
+	
 	collided:
-		li $t5, 1
+		addi $t1, $t1, -128		# cancel gravity
+		lw $t2, doodlerJumpDuration	# start/reset jump
 	
-	endC:
-	lw $s1, 8($sp)
-	lw $s0, 4($sp)
-	lw $ra, 0($sp)
+	endCollided:
+	
+	sw $s2, 8($sp)
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
 	addi $sp, $sp, 12
 	jr $ra
+
+
+checkKeyboardInput:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	lw $s0, 0xffff0000
+	beq $s0, 1, inputDetected
+	j endCKI
+	
+	inputDetected:
+	 	lw $s1, 0xffff0004
+		beq $s1, 0x6A, jPressed
+		beq $s1, 0x6B, kPressed
+		j endCKI
+	
+	jPressed:
+		addi $t1, $t1, -4
+		j endCKI
+	
+	kPressed:
+		addi $t1, $t1, 4
+	
+	endCKI:
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
 	
 
-# Draw doodler from $a1 pos and $a2 color
+# Draw doodler at $a0 position with $a1 color
 drawDoodler:
 	addi $sp, $sp, -4
-	sw $ra, ($sp)
-	sw $s0, 4($sp)
+	sw $s0, ($sp)
 	
-	add $s0, $gp, $a1
-	sw $a2, 4($s0)
-	sw $a2, 128($s0)
-	sw $a2, 132($s0)
-	sw $a2, 136($s0)
-	sw $a2, 256($s0)
-	sw $a2, 264($s0)
+	add $s0, $gp, $a0
+	sw $a1, 4($s0)
+	sw $a1, 128($s0)
+	sw $a1, 132($s0)
+	sw $a1, 136($s0)
+	sw $a1, 256($s0)
+	sw $a1, 264($s0)
 	
-	lw $s0, 4($sp)
-	lw $ra, ($sp)
+	lw $s0, ($sp)
 	addi $sp, $sp, 4
 	jr $ra
 	
-drawPlatform:
+spawnPlatforms:
 	addi $sp, $sp, -4
 	sw $ra, ($sp)
-	sw $s0, 4($sp)
 	
-	add $s0, $gp, $a1
-	sw $t3, ($s0)
-	sw $t3, 4($s0)
-	sw $t3, 8($s0)
-	sw $t3, 12($s0)
-	sw $t3, 16($s0)
+	lw $a1, platformColor
+	li $a0, 2644
+	jal drawPlatform
+	li $a0, 2352
+	jal drawPlatform
+	li $a0, 3392
+	jal drawPlatform
 	
-	lw $s0, 4($sp)
 	lw $ra, ($sp)
 	addi $sp, $sp, 4
 	jr $ra
 
-drawBackground:
-	sw $ra, ($sp)
+# Draw platform at $a0 position with $a1 color
+drawPlatform:	
+	addi $sp, $sp, -4
+	sw $s0, ($sp)
 	
-	li $t4, 0
+	add $s0, $gp, $a0
+	sw $a1, ($s0)
+	sw $a1, 4($s0)
+	sw $a1, 8($s0)
+	sw $a1, 12($s0)
+	sw $a1, 16($s0)
+	
+	lw $s0, ($sp)
+	addi $sp, $sp, 4
+	jr $ra
+
+# Draw background with $a0 color
+drawBackground:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	li $s0, 0
 	bgDrawLoop:
-		beq $t4, 4096, exitBgDrawLoop
-		add $t5, $t4, $gp
-		sw $t1, ($t5)
-		addi $t4, $t4, 4
+		beq $s0, 4096, exitBgDrawLoop
+		add $s1, $s0, $gp
+		sw $a0, ($s1)
+		addi $s0, $s0, 4
 		j bgDrawLoop
 	
 	exitBgDrawLoop:
 	
-	lw $ra, ($sp)
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
 	jr $ra
 	
-sleep:
+sleep:	
 	li $v0, 32
 	lw $a0, sleepDuration
 	syscall
+
 	jr $ra
