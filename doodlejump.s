@@ -28,31 +28,44 @@
 #
 #####################################################################
 .data
-	max: .word 4092
+	displayMaximum: .word 4096
+	platformsArray: .space 40
 	sleepDuration: .word 100
 	doodlerColor: .word 0x7FFF90
 	backgroundColor: .word 0xFFDFA8
 	platformColor: .word 0xFF8A33
 	doodlerInitialPosition: .word 64
-	doodlerJumpHeight: .word -1152
-	doodlerJumpDuration: .word 8	# jump duration in frames
+	doodlerJumpDuration: .word 10	# jump duration in frames
+	
 .text
 main:
+	
 	# paint background
 	lw $a0, backgroundColor
 	jal drawBackground
 	
+	jal spawnPlatforms
+	
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
+	li $t3, 4096			# last collide position
 
 	gameLoop:
+		# erase old platforms
+		lw $a0, backgroundColor
+		jal drawPlatforms
+		
 		# erase old doodler
 		move $a0, $t0
 		lw $a1, backgroundColor
 		jal drawDoodler
 		
-		jal spawnPlatforms
+		jal moveWorld
+		
+		# draw platforms
+		lw $a0, platformColor
+		jal drawPlatforms
 		
 		jal moveDoodler
 		
@@ -61,16 +74,44 @@ main:
 		lw $a1, doodlerColor
 		jal drawDoodler
 		
-
 		jal sleep
-
 		j gameLoop
 		
-	exitGameLoop:
-	
-	li $v0, 10 # terminate the program gracefully
-	syscall
+	endGameLoop:
+		li $v0, 10 # terminate the program gracefully
+		syscall
 
+moveWorld:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	bge $t3, 3200, endMoveWorld
+	addi $t3, $t3, 128
+	addi $t0, $t0, 128
+	
+	li $s0, 0
+	movePlatforms:
+		beq $s0, 40, endMoveWorld
+		lw $s1, platformsArray($s0)
+		addi $s1, $s1, 128
+		
+		lw $s2, displayMaximum
+		blt $s1, $s2, contMovePlatforms
+		addi $s1, $s1, -4096
+			
+		contMovePlatforms:
+			sw $s1, platformsArray($s0)
+			addi $s0, $s0, 4
+			j movePlatforms
+	
+	endMoveWorld:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
 
 moveDoodler:
 	addi $sp, $sp, -4
@@ -90,11 +131,11 @@ moveDoodler:
 		addi $t2, $t2, -1
 	
 	endMoveDoodler:
-	add $t0, $t0, $t1	# move doodler based on velocity
+		add $t0, $t0, $t1	# move doodler based on velocity
 	
-	lw $ra, ($sp)
-	addi $sp, $sp, 4
-	jr $ra
+		lw $ra, ($sp)
+		addi $sp, $sp, 4
+		jr $ra
 	
 checkDoodlerCollision:
 	addi $sp, $sp, -12
@@ -114,6 +155,7 @@ checkDoodlerCollision:
 	collided:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, doodlerJumpDuration	# start/reset jump
+		move $t3, $t0
 	
 	endCollided:
 	
@@ -172,35 +214,52 @@ drawDoodler:
 	
 spawnPlatforms:
 	addi $sp, $sp, -4
-	sw $ra, ($sp)
-	
-	lw $a1, platformColor
-	li $a0, 2644
-	jal drawPlatform
-	li $a0, 2352
-	jal drawPlatform
-	li $a0, 3392
-	jal drawPlatform
-	
-	lw $ra, ($sp)
-	addi $sp, $sp, 4
-	jr $ra
-
-# Draw platform at $a0 position with $a1 color
-drawPlatform:	
-	addi $sp, $sp, -4
 	sw $s0, ($sp)
 	
-	add $s0, $gp, $a0
-	sw $a1, ($s0)
-	sw $a1, 4($s0)
-	sw $a1, 8($s0)
-	sw $a1, 12($s0)
-	sw $a1, 16($s0)
+	li $s0, 0
+	spawnPlatform:
+		beq $s0, 40, endSpawnPlatform
+		li $v0, 42
+		li $a0, 0
+		li $a1, 1024
+		syscall
+		mul $a0, $a0, 4
+		
+		sw $a0, platformsArray($s0)
+		addi $s0, $s0, 4
+		j spawnPlatform
 	
-	lw $s0, ($sp)
-	addi $sp, $sp, 4
-	jr $ra
+	endSpawnPlatform:
+		lw $s0, ($sp)
+		addi $sp, $sp, 4
+		jr $ra
+
+# Draw platforms with $a0 color
+drawPlatforms:	
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	li $s0, 0
+	drawPlatform:
+		beq $s0, 40, endDrawPlatform
+		lw $s1, platformsArray($s0)
+		add $s1, $s1, $gp
+		
+		sw $a0, ($s1)
+		sw $a0, 4($s1)
+		sw $a0, 8($s1)
+		sw $a0, 12($s1)
+		sw $a0, 16($s1)
+		
+		addi $s0, $s0, 4
+		j drawPlatform
+	
+	endDrawPlatform:
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 8
+		jr $ra
 
 # Draw background with $a0 color
 drawBackground:
