@@ -56,7 +56,7 @@ main:
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
 	#lw $t3, displayMaximum
-	li $t4, 768			# scroll timer
+	li $t4, 768			# next spawn coord / spawn timer
 	li $t5, 0			# difficulty / platform spacing	
 	
 	li $s0, 0
@@ -80,7 +80,6 @@ main:
 		
 		jal moveDoodler
 		jal drawWorld
-		
 		
 		# draw doodler
 		move $a0, $t0
