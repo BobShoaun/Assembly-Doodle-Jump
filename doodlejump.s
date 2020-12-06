@@ -36,16 +36,20 @@
 	platformsArrayLength: .word 0
 	spring: .word 0
 	sleepDuration: .word 40
-	doodlerColor: .word 0x7FFF90
-	backgroundColor: .word 0xFFDFA8
-	platformColor: .word 0xFF8A33
-	springColor: .word 0x7E7E7E
-	brokenPlatformColor: .word 0x490909
+	
+	doodlerColor: .word 0xEEB1D5
+	backgroundColor: .word 0x43AA8B
+	platformColor: .word 0xF9C74F
+	springColor: .word 0x577590
+	brokenPlatformColor: .word 0xF3722C
 	cloudPlatformColor: .word 0xF0F0F0
+	jetpackColor: .word 0x191923
+	jumpMeterColor: .word 0xF94144
 	
 	doodlerInitialPosition: .word 64
 	doodlerJumpDuration: .word 13	# jump duration in frames
 	springBoostDuration: .word 25	# spring boost duration in frames
+	jetpackBoostDuration: .word 70
 	
 	displayToMatrixOffset: .word 768
 	
@@ -86,6 +90,8 @@ main:
 		lw $a1, doodlerColor
 		jal drawDoodler
 		
+		jal drawJumpMeter
+		
 		bgt $t0, 4096, endGameLoop	# doodler reaches bottom of screen
 		
 		jal sleep
@@ -94,6 +100,61 @@ main:
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
+		
+drawJumpMeter:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	lw $s2, jumpMeterColor
+	
+	div $s0, $t2, 3
+	drawJumpMeterLoop:
+		beq $s0, 0, endDrawJumpMeter
+		
+		mul $s1, $s0, -128
+		add $s1, $s1, $gp
+		
+		add $s2, $s2, 5	# gradient
+		sw $s2, 4088($s1)
+		
+		addi $s0, $s0, -1
+		j drawJumpMeterLoop
+	
+	endDrawJumpMeter:
+	
+	lw $s2, 8($sp)
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 12
+	jr $ra
+		
+spawnJetpack:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	li $s1, 5	# 5 represents jetpack
+	addi $s0, $t4, -128
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, -128
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, -128
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 132
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 132
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, -128
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, -128
+	sw $s1, gameMatrix($s0)
+	
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
 
 spawnCloudPlatform:
 	addi $sp, $sp, -8
@@ -217,24 +278,30 @@ spawnNewPlatform:
 	# RNG for type of obstacle
 	li $v0, 42
 	li $a0, 0
-	li $a1, 50
+	li $a1, 30
 	syscall
 	
-	blt $a0, 20, spawnNext1
+	blt $a0, 10, spawnNext1
 	jal spawnStandardPlatform
 	j endSpawn
 	
 	spawnNext1:
-	blt $a0, 15, spawnNext2
+	blt $a0, 8, spawnNext2
 	jal spawnBrokenPlatform
 	j endSpawn
 	
 	spawnNext2:
-	blt $a0, 4, spawnNext3
+	blt $a0, 6, spawnNext3
 	jal spawnCloudPlatform
 	j endSpawn
 	
 	spawnNext3:
+	blt $a0, 4, spawnNext4
+	jal spawnStandardPlatform
+	jal spawnJetpack
+	j endSpawn
+	
+	spawnNext4:
 	jal spawnStandardPlatform
 	jal spawnSpringPlatform
 	j endSpawn
@@ -306,10 +373,13 @@ drawWorld:
 		beq $s1, 2, dSpring
 		beq $s1, 3, dBrokenPlatform
 		beq $s1, 4, dCloudPlatform
+		beq $s1, 5, dJetpack
 		j contDrawLoop
 		
 	dBackground:
 		lw $s3, backgroundColor
+		div $s1, $s0, 64	# gradient
+		add $s3, $s3, $s1
 		j contDrawLoop
 		
 	dPlatform:
@@ -326,6 +396,10 @@ drawWorld:
 		
 	dCloudPlatform:
 		lw $s3, cloudPlatformColor
+		j contDrawLoop
+	
+	dJetpack:
+		lw $s3, jetpackColor
 		j contDrawLoop
 	
 	contDrawLoop:
@@ -387,6 +461,7 @@ checkDoodlerCollision:
 		beq $s2, 2, springCollision
 		beq $s2, 3, brokenPlatformCollision
 		beq $s2, 4, cloudPlatformCollision
+		beq $s2, 5, jetpackCollision
 
 		addi $s3, $s3, 4	# increase iterator
 		j checkCollisions
@@ -413,6 +488,10 @@ checkDoodlerCollision:
 		# remove cloud platform
 		move $a0, $s1
 		jal removePlatform
+		j endCheckCollisions
+		
+	jetpackCollision:
+		lw $t2, jetpackBoostDuration
 		j endCheckCollisions
 	
 	endCheckCollisions:
