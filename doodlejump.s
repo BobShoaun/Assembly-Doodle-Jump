@@ -187,7 +187,7 @@ removePlatform:
 	li $s1, -12	# iterate all possibilities of a 4 wide platform
 	
 	removeLoop:
-		beq $s1, 12, finishRemove
+		beq $s1, 16, finishRemove
 		add $s3, $a0, $s1	# current coord we are looking at
 		
 		lw $s4, gameMatrix($s3)	# load contents of current pixel
@@ -342,51 +342,7 @@ drawWorld:
 		lw $ra, ($sp)
 		addi $sp, $sp, 20
 		jr $ra
-		
-moveWorld:
-	addi $sp, $sp, -20
-	sw $ra, ($sp)
-	sw $s0, 4($sp)
-	sw $s1, 8($sp)
-	sw $s2, 12($sp)
-	sw $s3, 16($sp)
-	
-	#bge $t0, 1536, endMoveWorld
-	addi $t0, $t0, 128
-	
-	bge $t4, 256, contMW
-	
-	jal spawnPlatform
-	
-	contMW:
-	
-	addi $t4, $t4, -128
-	
-	# move spring
-	lw $s4, spring
-	addi $s4, $s4, 128
-	sw $s4, spring
-	
-	# move platforms
-	#lw $s3, platformsArrayLength
-	li $s0, 0
-	movePlatforms:
-		beq $s0, 44, endMoveWorld
-		lw $s1, platformsArray($s0)
-		addi $s1, $s1, 128
-		sw $s1, platformsArray($s0)
 
-		addi $s0, $s0, 4
-		j movePlatforms
-	
-	endMoveWorld:
-		lw $s3, 16($sp)
-		lw $s2, 12($sp)
-		lw $s1, 8($sp)
-		lw $s0, 4($sp)
-		lw $ra, ($sp)
-		addi $sp, $sp, 20
-		jr $ra
 
 moveDoodler:
 	addi $sp, $sp, -4
@@ -515,137 +471,6 @@ drawDoodler:
 	lw $s0, ($sp)
 	addi $sp, $sp, 4
 	jr $ra
-	
-spawnPlatforms:
-	addi $sp, $sp, -16
-	sw $ra, ($sp)
-	sw $s0, 4($sp)
-	sw $s1, 8($sp)
-	sw $s2, 12($sp)
-	
-	lw $s2, platformsArrayLength
-	li $s0, 0
-	spawn:
-		beq $s0, $s2, endSpawnPlatforms
-		
-		# spawn indiv platform
-		mul $a0, $s0, 128
-		move $a1, $s0
-		jal spawnPlatform
-		
-		addi $s0, $s0, 4
-		j spawn
-	
-	endSpawnPlatforms:
-		lw $s2, 12($sp)
-		lw $s1, 8($sp)
-		lw $s0, 4($sp)
-		lw $ra, ($sp)
-		addi $sp, $sp, 16
-		jr $ra
-
-# Spawn platform at $a0 offset, $a1 index
-spawnPlatform:
-	addi $sp, $sp, -20
-	sw $a0, ($sp)
-	sw $a1, 4($sp)
-	sw $s0, 8($sp)
-	sw $s1, 12($sp)
-	sw $s2, 16($sp)
-	
-	li $v0, 42
-	li $a0, 0
-	li $a1, 128
-	syscall
-	
-	mul $s0, $a0, -4	# coord form
-	
-	li $v0, 42
-	li $a0, 0
-	li $a1, 10
-	syscall
-	
-	# making space for new platform
-	li $s2, 44	# index
-	blt $s2, 0, endPlatArrayLoop	# loop condition
-	lw $s3, platformsArray($s2)
-	addi $s2, $s2, 4
-	sw $s3, platformsArray($s2)
-	
-	addi $s2, $s2, -8 # cuz already add 4 so -8 to go to next iter
-	
-	endPlatArrayLoop:
-		
-		
-	
-	#move $s1, $a0
-	#lw $a0, ($sp)
-	#lw $a1, 4($sp)
-	#add $s0, $s0, $a0 # apply offset
-	
-	#beq $s1, $zero, spawnSpring
-	#j endSpawnPlatform
-	
-	#spawnSpring:
-	#	addi $s1, $s0, -128
-	#	sw $s1, spring
-	
-	endSpawnPlatform:
-		sw $s0, platformsArray($zero) # spawn platform
-		
-		# update platform array length
-		lw $s0, platformsArrayLength
-		addi $s0, $s0, 4
-		sw $s0, platformsArrayLength
-	
-		lw $s2, 16($sp)
-		lw $s1, 12($sp)
-		lw $s0, 8($sp)
-		addi $sp, $sp, 20
-		jr $ra
-
-# draw spring with $a0 color
-drawSpring:
-	addi $sp, $sp, 4
-	sw $s0, ($sp)
-	
-	lw $s0, spring
-	add $s0, $s0, $gp
-	sw $a0, ($s0)
-	
-	lw $s0, ($sp)
-	addi $sp, $sp, -4
-	jr $ra
-
-# Draw platforms with $a0 color
-drawPlatforms:	
-	addi $sp, $sp, -12
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	sw $s2, 8($sp)
-	
-	lw $s2, platformsArrayLength
-	li $s0, 0
-	drawPlatform:
-		beq $s0, $s2, endDrawPlatform
-		lw $s1, platformsArray($s0)
-		add $s1, $s1, $gp
-		
-		sw $a0, ($s1)
-		sw $a0, 4($s1)
-		sw $a0, 8($s1)
-		sw $a0, 12($s1)
-		sw $a0, 16($s1)
-		
-		addi $s0, $s0, 4
-		j drawPlatform
-	
-	endDrawPlatform:
-		lw $s2, 8($sp)
-		lw $s1, 4($sp)
-		lw $s0, ($sp)
-		addi $sp, $sp, 12
-		jr $ra
 
 # Draw background with $a0 color
 drawBackground:
