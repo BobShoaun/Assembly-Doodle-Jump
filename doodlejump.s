@@ -83,8 +83,13 @@ main:
 		
 		skipScroll:
 			jal moveDoodler
+			
+			jal updateMovingPlatforms
+			
 			jal drawWorld
 		
+			
+			
 			# draw doodler
 			move $a0, $t0
 			lw $a1, doodlerColor
@@ -101,6 +106,34 @@ main:
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
+		
+updateMovingPlatforms:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	li $s0, 4864
+	
+	movePlatformLoop:
+		beq $s0, 768, endMovePlatLoop
+		lw $s1, gameMatrix($s0)
+		bne $s1, 6, contMovePlatLoop
+		
+		addi $s2, $s0, 4
+		sw $zero, gameMatrix($s0)
+		sw $s1, gameMatrix($s2)
+		
+		contMovePlatLoop:
+			addi $s0, $s0, -4
+			j movePlatformLoop
+	
+	endMovePlatLoop:
+	lw $s2, 8($sp)
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 12
+	jr $ra
 		
 drawScoreMeter:
 	addi $sp, $sp, -12
@@ -274,19 +307,19 @@ spawnNewPlatform:
 	j endSpawn
 	
 	spawnNext1:
-		blt $a0, 9, spawnNext2
+		blt $a0, 10, spawnNext2
 		li $a0, 3	# 3 represents broken platform
 		jal spawnPlatform
 		j endSpawn
 	
 	spawnNext2:
-		blt $a0, 8, spawnNext3
+		blt $a0, 10, spawnNext3
 		li $a0, 4	# 4 represents cloud platform
 		jal spawnPlatform
 		j endSpawn
 	
 	spawnNext3:
-		blt $a0, 7, spawnNext4
+		blt $a0, 4, spawnNext4
 		li $a0, 6	# 6 represents moving platform
 		jal spawnPlatform
 		j endSpawn
