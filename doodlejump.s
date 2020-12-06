@@ -28,6 +28,8 @@
 #
 #####################################################################
 .data
+	gameMatrix: .word 0:1536
+	gameMatrixLength: .word 6144
 	displayMaximum: .word 4096
 	platformsArray: .space 36
 	platformsArrayLength: .word 36
@@ -53,39 +55,45 @@ main:
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
 	lw $t3, displayMaximum
+	li $t4, 768			# scroll timer
 
 	gameLoop:
+		jal scrollWorld
+		jal spawnNewPlatform
+		
+		jal drawWorld
+	
 		# erase old platforms
-		lw $a0, backgroundColor
-		jal drawPlatforms
+		#lw $a0, backgroundColor
+		#jal drawPlatforms
 		
 		# erase old doodler
-		move $a0, $t0
-		lw $a1, backgroundColor
-		jal drawDoodler
+		#move $a0, $t0
+		#lw $a1, backgroundColor
+		#jal drawDoodler
 		
 		# erase old spring
-		lw $a0, backgroundColor
-		jal drawSpring
+		#lw $a0, backgroundColor
+		#jal drawSpring
 		
-		jal moveWorld
+		#jal moveWorld
 		
 		# draw platforms
-		lw $a0, platformColor
-		jal drawPlatforms
+		#lw $a0, platformColor
+		#jal drawPlatforms
 		
 		# draw spring
-		lw $a0, springColor
-		jal drawSpring
+		#lw $a0, springColor
+		#jal drawSpring
 		
-		jal moveDoodler
+		#jal moveDoodler
 		
 		# draw doodler
-		move $a0, $t0
-		lw $a1, doodlerColor
-		jal drawDoodler
+		#move $a0, $t0
+		#lw $a1, doodlerColor
+		#jal drawDoodler
 		
-		bgt $t0, $t3, endGameLoop	# doodler reaches bottom of screen
+		#bgt $t0, $t3, endGameLoop	# doodler reaches bottom of screen
 		
 		jal sleep
 		j gameLoop
@@ -93,6 +101,117 @@ main:
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
+		
+
+updateDoodlerMatrix:
+	#$t0
+		
+spawnNewPlatform:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s3, 4($sp)
+	
+	bge $t4, 768, endSpawnNewPlat
+	li $s3, 2	# 2 represents platform
+	move $s0, $t4
+
+	sw $s3, gameMatrix($s0) # spawn platform
+	addi $s0, $s0, 4
+	sw $s3, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $s3, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $s3, gameMatrix($s0)
+	
+	# RNG
+	li $v0, 42
+	li $a0, 0
+	li $a1, 192
+	syscall
+	
+	mul $a0, $a0, 4		# coord form
+	addi $t4, $a0, 768	# apply offset for buffer
+	addi $t4, $t4, 256	# apply general spacing
+	
+	endSpawnNewPlat:
+		lw $s3, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 8
+		jr $ra
+
+scrollWorld:
+	addi $sp, $sp, -20
+	sw $ra, ($sp)
+	sw $s0, 4($sp)
+	sw $s1, 8($sp)
+	sw $s2, 12($sp)
+	sw $s3, 16($sp)
+
+	li $s0, 4864
+	scroll:
+		blt $s0, $zero, endScrollWorld
+		lw $s1, gameMatrix($s0)
+		addi $s2, $s0, 128
+		sw $s1, gameMatrix($s2)
+		addi $s0, $s0, -4
+		j scroll
+		
+	endScrollWorld:
+		addi $t4, $t4, -128 # update scroll timer
+	
+		lw $s3, 16($sp)
+		lw $s2, 12($sp)
+		lw $s1, 8($sp)
+		lw $s0, 4($sp)
+		lw $ra, ($sp)
+		addi $sp, $sp, 20
+		jr $ra
+		
+drawWorld:
+	addi $sp, $sp, -20
+	sw $ra, ($sp)
+	sw $s0, 4($sp)
+	sw $s1, 8($sp)
+	sw $s2, 12($sp)
+	sw $s3, 16($sp)
+
+	li $s0, 0
+	drawLoop:
+		beq $s0, 4096, endDrawWorld
+		
+		addi $s2, $s0, 768	# matrix coords by applying offset
+		lw $s1, gameMatrix($s2)	# get value at coords
+		add $s2, $s0, $gp	# get address at coords
+		beq $s1, 0, dBackground
+		beq $s1, 1, dDoodler
+		beq $s1, 2, dPlatform
+		j contDrawLoop
+		
+	dBackground:
+		lw $s3, backgroundColor
+		j contDrawLoop
+		
+	dDoodler:
+		lw $s3, doodlerColor
+		j contDrawLoop
+	
+	dPlatform:
+		lw $s3, platformColor
+	
+	contDrawLoop:
+		sw $s3, ($s2)
+		addi $s0, $s0, 4
+		j drawLoop
+		
+	endDrawWorld:
+		lw $s3, 16($sp)
+		lw $s2, 12($sp)
+		lw $s1, 8($sp)
+		lw $s0, 4($sp)
+		lw $ra, ($sp)
+		addi $sp, $sp, 20
+		jr $ra
+		
 
 moveWorld:
 	addi $sp, $sp, -20
