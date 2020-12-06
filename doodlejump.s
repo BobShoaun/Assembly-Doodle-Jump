@@ -28,8 +28,9 @@
 #
 #####################################################################
 .data
-	gameMatrix: .word 0:1536
-	gameMatrixLength: .word 6144
+	gameMatrix: .word 0:4608
+	#gameMatrixLength: .word 6144
+	
 	displayMaximum: .word 4096
 	
 	platformsArray: .space 48
@@ -48,6 +49,7 @@
 	springBoostDuration: .word 25	# spring boost duration in frames
 	
 	displayToMatrixOffset: .word 768
+	screenWidth: .word 256
 	
 .text
 main:
@@ -55,15 +57,15 @@ main:
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
-	#lw $t3, displayMaximum
-	li $t4, 768			# next spawn coord / spawn timer
+	lw $t3, screenWidth
+	li $t4, 1536			# next spawn coord / spawn timer
 	li $t5, 0			# difficulty / platform spacing	
 	
 	li $s0, 0
 	startLoop:
-		beq $s0, 32, gameLoop
-		jal scrollWorld
-		jal spawnNewPlatform
+		beq $s0, 128, gameLoop
+		#jal scrollWorld
+		#jal spawnNewPlatform
 		jal drawWorld
 		addi $s0, $s0, 1
 		j startLoop
@@ -264,15 +266,14 @@ scrollWorld:
 	sw $s1, 8($sp)
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
-	
 
-	addi $t4, $t4, -128 	# update scroll timer
+	addi $t4, $t4, -256 	# update scroll timer
 	
-	li $s0, 4864
+	li $s0, 18172 
 	scroll:
 		blt $s0, $zero, endScrollWorld
 		lw $s1, gameMatrix($s0)
-		addi $s2, $s0, 128	# scroll amount
+		addi $s2, $s0, 256	# scroll amount
 		sw $s1, gameMatrix($s2)
 		addi $s0, $s0, -4
 		j scroll
@@ -294,13 +295,14 @@ drawWorld:
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
 
-	li $s0, 0
+	li $s0, 2048
 	drawLoop:
-		beq $s0, 4096, endDrawWorld
+		beq $s0, 18176, endDrawWorld
 		
-		addi $s2, $s0, 768	# matrix coords by applying offset
-		lw $s1, gameMatrix($s2)	# get value at coords
+		#addi $s2, $s0, -2048	# display coords by applying offset
 		add $s2, $s0, $gp	# get address at coords
+		
+		lw $s1, gameMatrix($s0)	# get value at coords
 		beq $s1, 0, dBackground
 		beq $s1, 1, dPlatform
 		beq $s1, 2, dSpring
@@ -329,7 +331,7 @@ drawWorld:
 		j contDrawLoop
 	
 	contDrawLoop:
-		sw $s3, ($s2)
+		sw $s3, -2048($s2)
 		addi $s0, $s0, 4
 		j drawLoop
 		
