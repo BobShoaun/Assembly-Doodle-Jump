@@ -6,10 +6,10 @@
 # Student: Ng Bob Shoaun, 1006568992
 #
 # Bitmap Display Configuration:
-# - Unit width in pixels: 8
-# - Unit height in pixels: 8
-# - Display width in pixels: 256
-# - Display height in pixels: 256
+# - Unit width in pixels: 16
+# - Unit height in pixels: 16
+# - Display width in pixels: 512
+# - Display height in pixels: 512
 # - Base Address for Display: 0x10008000 ($gp)
 #
 # Which milestone is reached in this submission? 1
@@ -44,7 +44,9 @@
 	brokenPlatformColor: .word 0xF3722C
 	cloudPlatformColor: .word 0xF0F0F0
 	jetpackColor: .word 0x191923
+	movingPlatformColor: .word 0x22577A
 	jumpMeterColor: .word 0xF94144
+	scoreMeterColor: .word 0x2708A0
 	
 	doodlerInitialPosition: .word 64
 	doodlerJumpDuration: .word 13	# jump duration in frames
@@ -79,28 +81,55 @@ main:
 		jal spawnNewPlatform
 		addi $t0, $t0, 128	# also scroll player
 		
-		
 		skipScroll:
+			jal moveDoodler
+			jal drawWorld
 		
-		jal moveDoodler
-		jal drawWorld
+			# draw doodler
+			move $a0, $t0
+			lw $a1, doodlerColor
+			jal drawDoodler
 		
-		# draw doodler
-		move $a0, $t0
-		lw $a1, doodlerColor
-		jal drawDoodler
+			jal drawJumpMeter
+			jal drawScoreMeter
 		
-		jal drawJumpMeter
-		
-		bgt $t0, 4096, endGameLoop	# doodler reaches bottom of screen
-		
-		jal sleep
-		j gameLoop
+			bgt $t0, 4096, endGameLoop	# doodler reaches bottom of screen
+			
+			jal sleep
+			j gameLoop
 		
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
 		
+drawScoreMeter:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	lw $s2, scoreMeterColor
+	div $s0, $t5, 12
+	
+	drawScoreMeterLoop:
+		beq $s0, 0, endDrawScoreMeter
+		
+		mul $s1, $s0, -128
+		add $s1, $s1, $gp
+		
+		add $s2, $s2, -4	# gradient
+		sw $s2, 3972($s1)
+		
+		addi $s0, $s0, -1
+		j drawScoreMeterLoop
+	
+	endDrawScoreMeter:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
+
 drawJumpMeter:
 	addi $sp, $sp, -12
 	sw $s0, ($sp)
@@ -123,12 +152,11 @@ drawJumpMeter:
 		j drawJumpMeterLoop
 	
 	endDrawJumpMeter:
-	
-	lw $s2, 8($sp)
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 12
-	jr $ra
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
 		
 spawnJetpack:
 	addi $sp, $sp, -8
@@ -156,48 +184,27 @@ spawnJetpack:
 	addi $sp, $sp, 8
 	jr $ra
 
-spawnCloudPlatform:
-	addi $sp, $sp, -8
+
+# a0 platform type
+spawnPlatform:
+	addi $sp, $sp, -4
 	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	
-	li $s1, 4	# 4 represents broken platform
+
 	move $s0, $t4
-	sw $s1, gameMatrix($s0) # spawn platform
+	sw $a0, gameMatrix($s0) # spawn platform
 	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
+	sw $a0, gameMatrix($s0)
 	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
+	sw $a0, gameMatrix($s0)
 	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	
-	lw $s1, 4($sp)
+	sw $a0, gameMatrix($s0)
+
 	lw $s0, ($sp)
-	addi $sp, $sp, 8
-	jr $ra
-	
-spawnBrokenPlatform:	
-	addi $sp, $sp, -8
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	
-	li $s1, 3	# 3 represents broken platform
-	move $s0, $t4
-	sw $s1, gameMatrix($s0) # spawn platform
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 8
+	addi $sp, $sp, 4
 	jr $ra
 
 # $a0 random position on platform
-spawnSpringPlatform:
+spawnSpring:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
@@ -213,27 +220,7 @@ spawnSpringPlatform:
 	lw $s0, ($sp)
 	addi $sp, $sp, 8
 	jr $ra
-	
-# $t4 position
-spawnStandardPlatform:
-	addi $sp, $sp, -8
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	
-	li $s1, 1	# 1 represents standard platform
-	move $s0, $t4
-	sw $s1, gameMatrix($s0) # spawn platform
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 8
-	jr $ra
+
 	
 # $a0 reference in game matrix coord
 removePlatform:
@@ -273,7 +260,7 @@ spawnNewPlatform:
 	
 	bge $t4, 768, endSpawnNewPlat
 	
-	addi $t5, $t5, 4	# increase difficulty
+	addi $t5, $t5, 1	# increase difficulty
 	
 	# RNG for type of obstacle
 	li $v0, 42
@@ -282,41 +269,52 @@ spawnNewPlatform:
 	syscall
 	
 	blt $a0, 10, spawnNext1
-	jal spawnStandardPlatform
+	li $a0, 1	# 1 represents standard platform
+	jal spawnPlatform
 	j endSpawn
 	
 	spawnNext1:
-	blt $a0, 8, spawnNext2
-	jal spawnBrokenPlatform
-	j endSpawn
+		blt $a0, 9, spawnNext2
+		li $a0, 3	# 3 represents broken platform
+		jal spawnPlatform
+		j endSpawn
 	
 	spawnNext2:
-	blt $a0, 6, spawnNext3
-	jal spawnCloudPlatform
-	j endSpawn
+		blt $a0, 8, spawnNext3
+		li $a0, 4	# 4 represents cloud platform
+		jal spawnPlatform
+		j endSpawn
 	
 	spawnNext3:
-	blt $a0, 4, spawnNext4
-	jal spawnStandardPlatform
-	jal spawnJetpack
-	j endSpawn
+		blt $a0, 7, spawnNext4
+		li $a0, 6	# 6 represents moving platform
+		jal spawnPlatform
+		j endSpawn
 	
 	spawnNext4:
-	jal spawnStandardPlatform
-	jal spawnSpringPlatform
-	j endSpawn
+		blt $a0, 4, spawnNext5
+		li $a0, 1	
+		jal spawnPlatform
+		jal spawnJetpack
+		j endSpawn
+		
+	spawnNext5:
+		li $a0, 1	
+		jal spawnPlatform
+		jal spawnSpring
+		j endSpawn
 	
 	endSpawn:
-	
-	# RNG for next platform
-	li $v0, 42
-	li $a0, 0
-	li $a1, 192
-	syscall
-	
-	mul $a0, $a0, 4		# coord form
-	addi $t4, $a0, 768	# apply offset for buffer
-	add $t4, $t4, $t5	# apply general spacing
+		# RNG for next platform
+		li $v0, 42
+		li $a0, 0
+		li $a1, 192
+		syscall
+		
+		add $a0, $a0, $t5	# apply difficulty as spacing
+		mul $a0, $a0, 4		# coord form
+		addi $t4, $a0, 768	# apply offset for buffer
+		#add $t4, $t4, $t5	# apply general spacing
 	
 	endSpawnNewPlat:
 		lw $s0, 4($sp)
@@ -374,6 +372,7 @@ drawWorld:
 		beq $s1, 3, dBrokenPlatform
 		beq $s1, 4, dCloudPlatform
 		beq $s1, 5, dJetpack
+		beq $s1, 6, dMovingPlatform
 		j contDrawLoop
 		
 	dBackground:
@@ -400,6 +399,10 @@ drawWorld:
 	
 	dJetpack:
 		lw $s3, jetpackColor
+		j contDrawLoop
+		
+	dMovingPlatform:
+		lw $s3, movingPlatformColor
 		j contDrawLoop
 	
 	contDrawLoop:
@@ -462,6 +465,7 @@ checkDoodlerCollision:
 		beq $s2, 3, brokenPlatformCollision
 		beq $s2, 4, cloudPlatformCollision
 		beq $s2, 5, jetpackCollision
+		beq $s2, 6, standardPlatformCollision
 
 		addi $s3, $s3, 4	# increase iterator
 		j checkCollisions
@@ -493,7 +497,7 @@ checkDoodlerCollision:
 	jetpackCollision:
 		lw $t2, jetpackBoostDuration
 		j endCheckCollisions
-	
+
 	endCheckCollisions:
 		lw $ra, 16($sp)
 		lw $s3, 12($sp)
