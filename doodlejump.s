@@ -40,6 +40,9 @@
 	backgroundColor: .word 0xFFDFA8
 	platformColor: .word 0xFF8A33
 	springColor: .word 0x7E7E7E
+	brokenPlatformColor: .word 0x490909
+	cloudPlatformColor: .word 0xF0F0F0
+	
 	doodlerInitialPosition: .word 64
 	doodlerJumpDuration: .word 13	# jump duration in frames
 	springBoostDuration: .word 25	# spring boost duration in frames
@@ -54,13 +57,11 @@ main:
 	li $t2, 0			# jump timer
 	#lw $t3, displayMaximum
 	li $t4, 768			# scroll timer
-	li $t5, 0			# difficulty / platform spacing
-	#li $t5, 
-	
+	li $t5, 0			# difficulty / platform spacing	
 	
 	li $s0, 0
 	startLoop:
-		beq $s0, 1024, gameLoop
+		beq $s0, 32, gameLoop
 		jal scrollWorld
 		jal spawnNewPlatform
 		jal drawWorld
@@ -78,7 +79,6 @@ main:
 		skipScroll:
 		
 		jal moveDoodler
-		
 		jal drawWorld
 		
 		
@@ -95,44 +95,152 @@ main:
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
-		
-		
-spawnNewPlatform:
+
+spawnCloudPlatform:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
-	sw $s3, 4($sp)
+	sw $s1, 4($sp)
 	
-	bge $t4, 768, endSpawnNewPlat
-	
-	addi $t5, $t5, 4	# increase difficulty
-	
-	li $s3, 1	# 1 represents platform
+	li $s1, 4	# 4 represents broken platform
 	move $s0, $t4
-	
-	sw $s3, gameMatrix($s0) # spawn platform
+	sw $s1, gameMatrix($s0) # spawn platform
 	addi $s0, $s0, 4
-	sw $s3, gameMatrix($s0)
+	sw $s1, gameMatrix($s0)
 	addi $s0, $s0, 4
-	sw $s3, gameMatrix($s0)
+	sw $s1, gameMatrix($s0)
 	addi $s0, $s0, 4
-	sw $s3, gameMatrix($s0)
+	sw $s1, gameMatrix($s0)
 	
-	# RNG to spawn spring
-	li $v0, 42
-	li $a0, 0
-	li $a1, 20
-	syscall
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
 	
-	bge $a0, 4, skipSpawnSpring
+spawnBrokenPlatform:	
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	li $s1, 3	# 3 represents broken platform
+	move $s0, $t4
+	sw $s1, gameMatrix($s0) # spawn platform
+	addi $s0, $s0, 4
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $s1, gameMatrix($s0)
+	
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
+
+# $a0 random position on platform
+spawnSpringPlatform:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
 	
 	mul $s0, $a0, 4		# multiply random num by 4 
 	add $s0, $s0, $t4	# get coords of platform
 	addi $s0, $s0, -128	# spawn above platform
 	
-	li $s3, 2	# 2 represents spring
-	sw $s3, gameMatrix($s0)
+	li $s1, 2	# 2 represents spring
+	sw $s1, gameMatrix($s0)
 	
-	skipSpawnSpring:
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+# $t4 position
+spawnStandardPlatform:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	li $s1, 1	# 1 represents standard platform
+	move $s0, $t4
+	sw $s1, gameMatrix($s0) # spawn platform
+	addi $s0, $s0, 4
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $s1, gameMatrix($s0)
+	
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+# $a0 reference in game matrix coord
+removePlatform:
+	addi $sp, $sp, -16
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	sw $s3, 12($sp)
+	
+	lw $s0, gameMatrix($a0)	# load reference pixel to know which platform it is
+	li $s1, -12	# iterate all possibilities of a 4 wide platform
+	
+	removeLoop:
+		beq $s1, 12, finishRemove
+		add $s3, $a0, $s1	# current coord we are looking at
+		
+		lw $s4, gameMatrix($s3)	# load contents of current pixel
+		bne $s4, $s0, contRemoveLoop	# check if same as reference
+		sw $zero, gameMatrix($s3)
+	
+	contRemoveLoop:
+		addi $s1, $s1, 4
+		j removeLoop
+	
+	finishRemove:
+		lw $s3, 12($sp)
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 16
+		jr $ra
+		
+spawnNewPlatform:
+	addi $sp, $sp, -8
+	sw $ra, ($sp)
+	sw $s0, 4($sp)
+	
+	bge $t4, 768, endSpawnNewPlat
+	
+	addi $t5, $t5, 4	# increase difficulty
+	
+	# RNG for type of obstacle
+	li $v0, 42
+	li $a0, 0
+	li $a1, 50
+	syscall
+	
+	blt $a0, 20, spawnNext1
+	jal spawnStandardPlatform
+	j endSpawn
+	
+	spawnNext1:
+	blt $a0, 15, spawnNext2
+	jal spawnBrokenPlatform
+	j endSpawn
+	
+	spawnNext2:
+	blt $a0, 4, spawnNext3
+	jal spawnCloudPlatform
+	j endSpawn
+	
+	spawnNext3:
+	jal spawnStandardPlatform
+	jal spawnSpringPlatform
+	j endSpawn
+	
+	endSpawn:
 	
 	# RNG for next platform
 	li $v0, 42
@@ -145,8 +253,8 @@ spawnNewPlatform:
 	add $t4, $t4, $t5	# apply general spacing
 	
 	endSpawnNewPlat:
-		lw $s3, 4($sp)
-		lw $s0, ($sp)
+		lw $s0, 4($sp)
+		lw $ra, ($sp)
 		addi $sp, $sp, 8
 		jr $ra
 
@@ -197,6 +305,8 @@ drawWorld:
 		beq $s1, 0, dBackground
 		beq $s1, 1, dPlatform
 		beq $s1, 2, dSpring
+		beq $s1, 3, dBrokenPlatform
+		beq $s1, 4, dCloudPlatform
 		j contDrawLoop
 		
 	dBackground:
@@ -209,6 +319,14 @@ drawWorld:
 		
 	dSpring:
 		lw $s3, springColor
+		j contDrawLoop
+	
+	dBrokenPlatform:
+		lw $s3, brokenPlatformColor
+		j contDrawLoop
+		
+	dCloudPlatform:
+		lw $s3, cloudPlatformColor
 		j contDrawLoop
 	
 	contDrawLoop:
@@ -295,47 +413,60 @@ moveDoodler:
 		jr $ra
 	
 checkDoodlerCollision:
-	addi $sp, $sp, -16
+	addi $sp, $sp, -20
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	sw $s2, 8($sp)
 	sw $s3, 12($sp)
+	sw $ra, 16($sp)
 
 	addi $s0, $t0, 768 	# current pos in game matrix coords
 	
-	addi $s1, $s0, 384	# left foot
-	lw $s2, gameMatrix($s1)
-	beq $s2, 1, platformCollided
-	beq $s2, 2, springCollided
+	li $s3, 384	# check left, middle and right
 	
-	addi $s1, $s0, 388	# middle
-	lw $s2, gameMatrix($s1)
-	beq $s2, 1, platformCollided
-	beq $s2, 2, springCollided
-	
-	addi $s1, $s0, 392	# right foot
-	lw $s2, gameMatrix($s1)
-	beq $s2, 1, platformCollided
-	beq $s2, 2, springCollided
+	checkCollisions:
+		beq $s3, 396, endCheckCollisions
+		add $s1, $s0, $s3
+		lw $s2, gameMatrix($s1)
+		beq $s2, 1, standardPlatformCollision
+		beq $s2, 2, springCollision
+		beq $s2, 3, brokenPlatformCollision
+		beq $s2, 4, cloudPlatformCollision
 
-	j endCollided
+		addi $s3, $s3, 4	# increase iterator
+		j checkCollisions
 	
-	platformCollided:
+	standardPlatformCollision:
 		addi $t1, $t1, -128		# cancel gravity
-		lw $t2, doodlerJumpDuration	# start/reset jump
-		j endCollided
+		lw $t2, doodlerJumpDuration	# start jump
+		j endCheckCollisions
 	
-	springCollided:
+	springCollision:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, springBoostDuration	# start jump with higher duration
-		j endCollided
+		j endCheckCollisions
+		
+	brokenPlatformCollision:
+		# remove broken platform
+		move $a0, $s1
+		jal removePlatform
+		j endCheckCollisions
 	
-	endCollided:
+	cloudPlatformCollision:
+		addi $t1, $t1, -128		# cancel gravity
+		lw $t2, doodlerJumpDuration	# start jump
+		# remove cloud platform
+		move $a0, $s1
+		jal removePlatform
+		j endCheckCollisions
+	
+	endCheckCollisions:
+		lw $ra, 16($sp)
 		lw $s3, 12($sp)
 		lw $s2, 8($sp)
 		lw $s1, 4($sp)
 		lw $s0, ($sp)
-		addi $sp, $sp, 16
+		addi $sp, $sp, 20
 		jr $ra
 
 
