@@ -31,8 +31,9 @@
 	gameMatrix: .word 0:1536
 	gameMatrixLength: .word 6144
 	displayMaximum: .word 4096
-	platformsArray: .space 36
-	platformsArrayLength: .word 36
+	
+	platformsArray: .space 48
+	platformsArrayLength: .word 0
 	spring: .word 0
 	sleepDuration: .word 50
 	doodlerColor: .word 0x7FFF90
@@ -49,20 +50,34 @@ main:
 	lw $a0, backgroundColor
 	jal drawBackground
 	
-	jal spawnPlatforms
+	#jal spawnPlatforms
 	
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
-	lw $t3, displayMaximum
+	#lw $t3, displayMaximum
 	li $t4, 768			# scroll timer
-
-	gameLoop:
+	#li $t5, 
+	
+	
+	li $s0, 0
+	startLoop:
+		beq $s0, 32, gameLoop
 		jal scrollWorld
 		jal spawnNewPlatform
-		
 		jal drawWorld
-	
+		addi $s0, $s0, 1
+		j startLoop
+
+	gameLoop:
+		
+		bge $t0, 1536, skipScroll
+		jal scrollWorld
+		jal spawnNewPlatform
+		addi $t0, $t0, 128	# also scroll player
+		
+		
+		skipScroll:
 		# erase old platforms
 		#lw $a0, backgroundColor
 		#jal drawPlatforms
@@ -71,6 +86,12 @@ main:
 		#move $a0, $t0
 		#lw $a1, backgroundColor
 		#jal drawDoodler
+		
+		
+		
+		jal moveDoodler
+		
+		jal drawWorld
 		
 		# erase old spring
 		#lw $a0, backgroundColor
@@ -86,14 +107,13 @@ main:
 		#lw $a0, springColor
 		#jal drawSpring
 		
-		#jal moveDoodler
 		
 		# draw doodler
-		#move $a0, $t0
-		#lw $a1, doodlerColor
-		#jal drawDoodler
+		move $a0, $t0
+		lw $a1, doodlerColor
+		jal drawDoodler
 		
-		#bgt $t0, $t3, endGameLoop	# doodler reaches bottom of screen
+		bgt $t0, 4096, endGameLoop	# doodler reaches bottom of screen
 		
 		jal sleep
 		j gameLoop
@@ -146,19 +166,19 @@ scrollWorld:
 	sw $s1, 8($sp)
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
+	
 
+	addi $t4, $t4, -128 # update scroll timer
 	li $s0, 4864
 	scroll:
 		blt $s0, $zero, endScrollWorld
 		lw $s1, gameMatrix($s0)
-		addi $s2, $s0, 128
+		addi $s2, $s0, 128	# scroll amount
 		sw $s1, gameMatrix($s2)
 		addi $s0, $s0, -4
 		j scroll
 		
 	endScrollWorld:
-		addi $t4, $t4, -128 # update scroll timer
-	
 		lw $s3, 16($sp)
 		lw $s2, 12($sp)
 		lw $s1, 8($sp)
@@ -213,6 +233,9 @@ drawWorld:
 		jr $ra
 		
 
+spawnNewPlat:
+	
+
 moveWorld:
 	addi $sp, $sp, -20
 	sw $ra, ($sp)
@@ -221,8 +244,16 @@ moveWorld:
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
 	
-	bge $t0, 1536, endMoveWorld
+	#bge $t0, 1536, endMoveWorld
 	addi $t0, $t0, 128
+	
+	bge $t4, 256, contMW
+	
+	jal spawnPlatform
+	
+	contMW:
+	
+	addi $t4, $t4, -128
 	
 	# move spring
 	lw $s4, spring
@@ -230,24 +261,16 @@ moveWorld:
 	sw $s4, spring
 	
 	# move platforms
-	lw $s3, platformsArrayLength
+	#lw $s3, platformsArrayLength
 	li $s0, 0
 	movePlatforms:
-		beq $s0, $s3, endMoveWorld
+		beq $s0, 44, endMoveWorld
 		lw $s1, platformsArray($s0)
 		addi $s1, $s1, 128
 		sw $s1, platformsArray($s0)
-		
-		lw $s2, displayMaximum
-		ble $s1, $s2, contMovePlatforms
-		
-		li $a0, 0
-		move $a1, $s0
-		jal spawnPlatform
-			
-		contMovePlatforms:
-			addi $s0, $s0, 4
-			j movePlatforms
+
+		addi $s0, $s0, 4
+		j movePlatforms
 	
 	endMoveWorld:
 		lw $s3, 16($sp)
@@ -401,11 +424,12 @@ spawnPlatforms:
 
 # Spawn platform at $a0 offset, $a1 index
 spawnPlatform:
-	addi $sp, $sp, -16
+	addi $sp, $sp, -20
 	sw $a0, ($sp)
 	sw $a1, 4($sp)
 	sw $s0, 8($sp)
 	sw $s1, 12($sp)
+	sw $s2, 16($sp)
 	
 	li $v0, 42
 	li $a0, 0
@@ -419,24 +443,43 @@ spawnPlatform:
 	li $a1, 10
 	syscall
 	
-	move $s1, $a0
-	lw $a0, ($sp)
-	lw $a1, 4($sp)
-	add $s0, $s0, $a0 # apply offset
+	# making space for new platform
+	li $s2, 44	# index
+	blt $s2, 0, endPlatArrayLoop	# loop condition
+	lw $s3, platformsArray($s2)
+	addi $s2, $s2, 4
+	sw $s3, platformsArray($s2)
 	
-	beq $s1, $zero, spawnSpring
-	j endSpawnPlatform
+	addi $s2, $s2, -8 # cuz already add 4 so -8 to go to next iter
 	
-	spawnSpring:
-		addi $s1, $s0, -128
-		sw $s1, spring
+	endPlatArrayLoop:
+		
+		
+	
+	#move $s1, $a0
+	#lw $a0, ($sp)
+	#lw $a1, 4($sp)
+	#add $s0, $s0, $a0 # apply offset
+	
+	#beq $s1, $zero, spawnSpring
+	#j endSpawnPlatform
+	
+	#spawnSpring:
+	#	addi $s1, $s0, -128
+	#	sw $s1, spring
 	
 	endSpawnPlatform:
-		sw $s0, platformsArray($a1)
+		sw $s0, platformsArray($zero) # spawn platform
+		
+		# update platform array length
+		lw $s0, platformsArrayLength
+		addi $s0, $s0, 4
+		sw $s0, platformsArrayLength
 	
+		lw $s2, 16($sp)
 		lw $s1, 12($sp)
 		lw $s0, 8($sp)
-		addi $sp, $sp, 16
+		addi $sp, $sp, 20
 		jr $ra
 
 # draw spring with $a0 color
