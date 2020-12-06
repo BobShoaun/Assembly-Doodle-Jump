@@ -35,34 +35,32 @@
 	platformsArray: .space 48
 	platformsArrayLength: .word 0
 	spring: .word 0
-	sleepDuration: .word 50
+	sleepDuration: .word 40
 	doodlerColor: .word 0x7FFF90
 	backgroundColor: .word 0xFFDFA8
 	platformColor: .word 0xFF8A33
 	springColor: .word 0x7E7E7E
 	doodlerInitialPosition: .word 64
-	doodlerJumpDuration: .word 12	# jump duration in frames
+	doodlerJumpDuration: .word 13	# jump duration in frames
+	springBoostDuration: .word 25	# spring boost duration in frames
+	
+	displayToMatrixOffset: .word 768
 	
 .text
 main:
-	
-	# paint background
-	lw $a0, backgroundColor
-	jal drawBackground
-	
-	#jal spawnPlatforms
 	
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
 	#lw $t3, displayMaximum
 	li $t4, 768			# scroll timer
+	li $t5, 0			# difficulty / platform spacing
 	#li $t5, 
 	
 	
 	li $s0, 0
 	startLoop:
-		beq $s0, 32, gameLoop
+		beq $s0, 1024, gameLoop
 		jal scrollWorld
 		jal spawnNewPlatform
 		jal drawWorld
@@ -78,34 +76,10 @@ main:
 		
 		
 		skipScroll:
-		# erase old platforms
-		#lw $a0, backgroundColor
-		#jal drawPlatforms
-		
-		# erase old doodler
-		#move $a0, $t0
-		#lw $a1, backgroundColor
-		#jal drawDoodler
-		
-		
 		
 		jal moveDoodler
 		
 		jal drawWorld
-		
-		# erase old spring
-		#lw $a0, backgroundColor
-		#jal drawSpring
-		
-		#jal moveWorld
-		
-		# draw platforms
-		#lw $a0, platformColor
-		#jal drawPlatforms
-		
-		# draw spring
-		#lw $a0, springColor
-		#jal drawSpring
 		
 		
 		# draw doodler
@@ -122,9 +96,6 @@ main:
 		li $v0, 10 # terminate the program gracefully
 		syscall
 		
-
-updateDoodlerMatrix:
-	#$t0
 		
 spawnNewPlatform:
 	addi $sp, $sp, -8
@@ -132,9 +103,12 @@ spawnNewPlatform:
 	sw $s3, 4($sp)
 	
 	bge $t4, 768, endSpawnNewPlat
-	li $s3, 2	# 2 represents platform
+	
+	addi $t5, $t5, 4	# increase difficulty
+	
+	li $s3, 1	# 1 represents platform
 	move $s0, $t4
-
+	
 	sw $s3, gameMatrix($s0) # spawn platform
 	addi $s0, $s0, 4
 	sw $s3, gameMatrix($s0)
@@ -143,7 +117,24 @@ spawnNewPlatform:
 	addi $s0, $s0, 4
 	sw $s3, gameMatrix($s0)
 	
-	# RNG
+	# RNG to spawn spring
+	li $v0, 42
+	li $a0, 0
+	li $a1, 20
+	syscall
+	
+	bge $a0, 4, skipSpawnSpring
+	
+	mul $s0, $a0, 4		# multiply random num by 4 
+	add $s0, $s0, $t4	# get coords of platform
+	addi $s0, $s0, -128	# spawn above platform
+	
+	li $s3, 2	# 2 represents spring
+	sw $s3, gameMatrix($s0)
+	
+	skipSpawnSpring:
+	
+	# RNG for next platform
 	li $v0, 42
 	li $a0, 0
 	li $a1, 192
@@ -151,7 +142,7 @@ spawnNewPlatform:
 	
 	mul $a0, $a0, 4		# coord form
 	addi $t4, $a0, 768	# apply offset for buffer
-	addi $t4, $t4, 256	# apply general spacing
+	add $t4, $t4, $t5	# apply general spacing
 	
 	endSpawnNewPlat:
 		lw $s3, 4($sp)
@@ -168,7 +159,8 @@ scrollWorld:
 	sw $s3, 16($sp)
 	
 
-	addi $t4, $t4, -128 # update scroll timer
+	addi $t4, $t4, -128 	# update scroll timer
+	
 	li $s0, 4864
 	scroll:
 		blt $s0, $zero, endScrollWorld
@@ -203,20 +195,21 @@ drawWorld:
 		lw $s1, gameMatrix($s2)	# get value at coords
 		add $s2, $s0, $gp	# get address at coords
 		beq $s1, 0, dBackground
-		beq $s1, 1, dDoodler
-		beq $s1, 2, dPlatform
+		beq $s1, 1, dPlatform
+		beq $s1, 2, dSpring
 		j contDrawLoop
 		
 	dBackground:
 		lw $s3, backgroundColor
 		j contDrawLoop
 		
-	dDoodler:
-		lw $s3, doodlerColor
-		j contDrawLoop
-	
 	dPlatform:
 		lw $s3, platformColor
+		j contDrawLoop
+		
+	dSpring:
+		lw $s3, springColor
+		j contDrawLoop
 	
 	contDrawLoop:
 		sw $s3, ($s2)
@@ -232,10 +225,6 @@ drawWorld:
 		addi $sp, $sp, 20
 		jr $ra
 		
-
-spawnNewPlat:
-	
-
 moveWorld:
 	addi $sp, $sp, -20
 	sw $ra, ($sp)
@@ -311,22 +300,24 @@ checkDoodlerCollision:
 	sw $s1, 4($sp)
 	sw $s2, 8($sp)
 	sw $s3, 12($sp)
+
+	addi $s0, $t0, 768 	# current pos in game matrix coords
 	
-	lw $s2, platformColor
-	lw $s3, springColor
+	addi $s1, $s0, 384	# left foot
+	lw $s2, gameMatrix($s1)
+	beq $s2, 1, platformCollided
+	beq $s2, 2, springCollided
 	
-	add $s0, $gp, $t0
-	lw $s1, 384($s0)	# left foot
-	beq $s1, $s2, platformCollided
-	beq $s1, $s3, springCollided
+	addi $s1, $s0, 388	# middle
+	lw $s2, gameMatrix($s1)
+	beq $s2, 1, platformCollided
+	beq $s2, 2, springCollided
 	
-	lw $s1, 388($s0)	# middle
-	beq $s1, $s2, platformCollided
-	beq $s1, $s3, springCollided
-	
-	lw $s1, 392($s0)	# right foot
-	beq $s1, $s2, platformCollided 
-	beq $s1, $s3, springCollided
+	addi $s1, $s0, 392	# right foot
+	lw $s2, gameMatrix($s1)
+	beq $s2, 1, platformCollided
+	beq $s2, 2, springCollided
+
 	j endCollided
 	
 	platformCollided:
@@ -336,7 +327,7 @@ checkDoodlerCollision:
 	
 	springCollided:
 		addi $t1, $t1, -128		# cancel gravity
-		li $t2, 30			# start jump with higher duration
+		lw $t2, springBoostDuration	# start jump with higher duration
 		j endCollided
 	
 	endCollided:
