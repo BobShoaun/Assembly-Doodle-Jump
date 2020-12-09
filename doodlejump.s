@@ -47,6 +47,7 @@
 	movingPlatformColor: .word 0x22577A
 	jumpMeterColor: .word 0xF94144
 	scoreMeterColor: .word 0x2708A0
+	gameOverTextColor: .word 0x000000
 	
 	doodlerInitialPosition: .word 64
 	doodlerJumpDuration: .word 13	# jump duration in frames
@@ -57,11 +58,10 @@
 	
 .text
 main:
-	
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
-	#lw $t3, displayMaximum
+	li $t3, 0			# game over flag, 1 means game over
 	li $t4, 768			# next spawn coord / spawn timer
 	li $t5, 0			# difficulty / platform spacing	
 	
@@ -82,30 +82,126 @@ main:
 		addi $t0, $t0, 128	# also scroll player
 		
 		skipScroll:
-			jal moveDoodler
-			
 			jal updateMovingPlatforms
 			
+			beq $t3, 1, skipMoveDoodler
+			jal moveDoodler
+		
+		skipMoveDoodler:
 			jal drawWorld
-		
-			
-			
-			# draw doodler
-			move $a0, $t0
-			lw $a1, doodlerColor
 			jal drawDoodler
-		
 			jal drawJumpMeter
 			jal drawScoreMeter
 		
-			bgt $t0, 4096, endGameLoop	# doodler reaches bottom of screen
+			ble $t0, 4096, skipGameOver	# doodler reaches bottom of screen
+			li $t3, 1		# set gameOver to true
+			jal gameOver
+			jal drawGameOverText
 			
+		skipGameOver:
 			jal sleep
 			j gameLoop
 		
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
+		
+gameOver:
+	lw $s0, 0xffff0000
+	beq $s0, 1, gameOverInput
+	jr $ra
+	
+	gameOverInput:
+	 	lw $s1, 0xffff0004
+		beq $s1, 0x72, rPressed
+		beq $s1, 0x71, qPressed
+		jr $ra
+	
+	rPressed:
+		j main
+	
+	qPressed:
+		li $v0, 10 # terminate the program gracefully
+		syscall
+		
+drawGameOverText:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	lw $s0, gameOverTextColor
+	addi $s1, $gp, 1960
+	
+	# o
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 128($s1)
+	sw $s0, 136($s1)
+	sw $s0, 256($s1)
+	sw $s0, 260($s1)
+	sw $s0, 264($s1)
+	
+	addi $s1, $s1, 16
+	
+	# o
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 128($s1)
+	sw $s0, 136($s1)
+	sw $s0, 256($s1)
+	sw $s0, 260($s1)
+	sw $s0, 264($s1)
+	
+	addi $s1, $s1, 16
+	
+	# f
+	sw $s0, -252($s1)
+	sw $s0, -248($s1)
+	sw $s0, -124($s1)
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 132($s1)
+	sw $s0, 260($s1)
+	
+	addi $s1, $s1, 1380
+	
+	# r
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 128($s1)
+	sw $s0, 256($s1)
+	
+	addi $s1, $s1, 16
+	
+	# |
+	sw $s0, -128($s1)
+	sw $s0, 0($s1)
+	sw $s0, 128($s1)
+	sw $s0, 256($s1)
+	sw $s0, 384($s1)
+	
+	addi $s1, $s1, 12
+	
+	# q
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 128($s1)
+	sw $s0, 136($s1)
+	sw $s0, 260($s1)
+	sw $s0, 264($s1)
+	sw $s0, 392($s1)
+	sw $s0, 520($s1)
+	sw $s0, 524($s1)
+	
+	lw $s2, 8($sp)
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 12
+	jr $ra
 		
 updateMovingPlatforms:
 	addi $sp, $sp, -12
@@ -572,19 +668,22 @@ checkKeyboardInput:
 
 # Draw doodler at $a0 position with $a1 color
 drawDoodler:
-	addi $sp, $sp, -4
+	addi $sp, $sp, -8
 	sw $s0, ($sp)
+	sw $s1, 4($sp)
 	
-	add $s0, $gp, $a0
-	sw $a1, 4($s0)
-	sw $a1, 128($s0)
-	sw $a1, 132($s0)
-	sw $a1, 136($s0)
-	sw $a1, 256($s0)
-	sw $a1, 264($s0)
+	lw $s1, doodlerColor
+	add $s0, $gp, $t0
+	sw $s1, 4($s0)
+	sw $s1, 128($s0)
+	sw $s1, 132($s0)
+	sw $s1, 136($s0)
+	sw $s1, 256($s0)
+	sw $s1, 264($s0)
 	
+	lw $s1, 4($sp)
 	lw $s0, ($sp)
-	addi $sp, $sp, 4
+	addi $sp, $sp, 8
 	jr $ra
 
 # Draw background with $a0 color
