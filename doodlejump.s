@@ -64,6 +64,7 @@ main:
 	li $t3, 0			# game over flag, 1 means game over
 	li $t4, 768			# next spawn coord / spawn timer
 	li $t5, 0			# difficulty / platform spacing	
+	li $t6, -128			# moving platforms move timer
 	
 	li $s0, 0
 	startLoop:
@@ -82,7 +83,7 @@ main:
 		addi $t0, $t0, 128	# also scroll player
 		
 		skipScroll:
-			jal updateMovingPlatforms
+			jal movePlatforms
 			
 			beq $t3, 1, skipMoveDoodler
 			jal moveDoodler
@@ -202,34 +203,83 @@ drawGameOverText:
 	lw $s0, ($sp)
 	addi $sp, $sp, 12
 	jr $ra
+	
+movePlatforms:
+	addi $sp, $sp, -4
+	sw $ra, ($sp)
+	blt $t6, 128, contMovePlatforms
+	li $t6, -128
+	
+	contMovePlatforms:
+		blt $t6, 0, moveRight
+		jal movePlatsLeft
+		j endMovePlatforms
 		
-updateMovingPlatforms:
+	moveRight:
+		jal movePlatsRight
+	
+	endMovePlatforms:
+		lw $ra, ($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+movePlatsRight:
 	addi $sp, $sp, -12
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	sw $s2, 8($sp)
 	
-	li $s0, 4864
+	addi $t6, $t6, 4
 	
-	movePlatformLoop:
-		beq $s0, 768, endMovePlatLoop
+	li $s0, 4864
+	loopMovePlatsRight:
+		beq $s0, 768, endMovePlatsRight
 		lw $s1, gameMatrix($s0)
-		bne $s1, 6, contMovePlatLoop
+		bne $s1, 6, contMovePlatsRight
 		
 		addi $s2, $s0, 4
 		sw $zero, gameMatrix($s0)
 		sw $s1, gameMatrix($s2)
 		
-		contMovePlatLoop:
+		contMovePlatsRight:
 			addi $s0, $s0, -4
-			j movePlatformLoop
+			j loopMovePlatsRight
 	
-	endMovePlatLoop:
-	lw $s2, 8($sp)
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 12
-	jr $ra
+	endMovePlatsRight:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
+		
+movePlatsLeft:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	addi $t6, $t6, 4
+	
+	li $s0, 768
+	loopMovePlatsLeft:
+		beq $s0, 4864, endMovePlatsLeft
+		lw $s1, gameMatrix($s0)
+		bne $s1, 6, contMovePlatsLeft
+		
+		addi $s2, $s0, -4
+		sw $zero, gameMatrix($s0)
+		sw $s1, gameMatrix($s2)
+		
+		contMovePlatsLeft:
+			addi $s0, $s0, 4
+			j loopMovePlatsLeft
+	
+	endMovePlatsLeft:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
 		
 drawScoreMeter:
 	addi $sp, $sp, -12
