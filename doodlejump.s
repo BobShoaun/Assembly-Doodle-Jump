@@ -23,9 +23,10 @@
 # 5. More platform types
 # 6. Boosting / power-ups
 # 7. Fancier graphics
+# 8. Background music & sound effects
 #
 # Any additional information that the TA needs to know:
-# - (write here, if any)
+# 
 #
 #####################################################################
 .data
@@ -61,6 +62,8 @@ main:
 	li $t6, -128			# moving platforms move timer
 	li $t7, 0			# background music timer
 	
+	jal playRetrySound
+	
 	li $s0, 0
 	startLoop:
 		beq $s0, 32, gameLoop
@@ -90,12 +93,16 @@ main:
 			jal drawJumpMeter
 			jal drawScoreMeter
 		
-			ble $t0, 4096, skipGameOver	# doodler reaches bottom of screen
-			li $t3, 1		# set gameOver to true
+			ble $t0, 4096, contGameLoop	# doodler reaches bottom of screen
+			
 			jal gameOver
 			jal drawGameOverText
 			
-		skipGameOver:
+			beq $t3, 1, contGameLoop
+			li $t3, 1		# set gameOver to true
+			jal playGameOverSound
+			
+		contGameLoop:
 			jal sleep
 			j gameLoop
 		
@@ -219,7 +226,7 @@ playBackgroundMusic:
 
 	li $a1, 3000	# duration
 	li $a2, 0	# instrument
-	li $a3, 40	# volume
+	li $a3, 20	# volume
 	li $v0, 31
 	syscall
 	
@@ -229,6 +236,24 @@ playBackgroundMusic:
 	lw $s1, 4($sp)
 	lw $s0, ($sp)
 	addi $sp, $sp, 8
+	jr $ra
+	
+playGameOverSound:
+	li $a0, 80	# pitch
+	li $a1, 2000	# duration
+	li $a2, 127	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playRetrySound:
+	li $a0, 80	# pitch
+	li $a1, 1500	# duration
+	li $a2, 125	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
 	jr $ra
 	
 playJumpSound:
@@ -648,7 +673,7 @@ drawWorld:
 		
 	dBackground:
 		lw $s3, backgroundColor
-		div $s1, $s0, 64	# gradient
+		div $s1, $s0, 40	# gradient
 		add $s3, $s3, $s1
 		j contDrawLoop
 		
