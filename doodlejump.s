@@ -30,15 +30,10 @@
 #####################################################################
 .data
 	gameMatrix: .word 0:1536
-	gameMatrixLength: .word 6144
-	displayMaximum: .word 4096
-	
-	platformsArray: .space 48
-	platformsArrayLength: .word 0
-	spring: .word 0
 	sleepDuration: .word 40
 	
 	doodlerColor: .word 0xEEB1D5
+	doodlerSecondaryColor: .word 0xe58abf
 	backgroundColor: .word 0x43AA8B
 	platformColor: .word 0xF9C74F
 	springColor: .word 0x577590
@@ -54,8 +49,6 @@
 	doodlerJumpDuration: .word 13	# jump duration in frames
 	springBoostDuration: .word 25	# spring boost duration in frames
 	jetpackBoostDuration: .word 70
-	
-	displayToMatrixOffset: .word 768
 	
 .text
 main:
@@ -367,7 +360,7 @@ drawScoreMeter:
 	sw $s2, 8($sp)
 	
 	lw $s2, scoreMeterColor
-	div $s0, $t5, 12
+	div $s0, $t5, 24
 	
 	drawScoreMeterLoop:
 		beq $s0, 0, endDrawScoreMeter
@@ -375,7 +368,7 @@ drawScoreMeter:
 		mul $s1, $s0, -128
 		add $s1, $s1, $gp
 		
-		add $s2, $s2, -4	# gradient
+		add $s2, $s2, -5	# gradient
 		sw $s2, 3972($s1)
 		
 		addi $s0, $s0, -1
@@ -456,6 +449,8 @@ spawnPlatform:
 	sw $a0, gameMatrix($s0)
 	addi $s0, $s0, 4
 	sw $a0, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $a0, gameMatrix($s0)
 
 	lw $s0, ($sp)
 	addi $sp, $sp, 4
@@ -489,10 +484,10 @@ removePlatform:
 	sw $s3, 12($sp)
 	
 	lw $s0, gameMatrix($a0)	# load reference pixel to know which platform it is
-	li $s1, -12	# iterate all possibilities of a 4 wide platform
+	li $s1, -16	# iterate all possibilities of a 4 wide platform
 	
 	removeLoop:
-		beq $s1, 16, finishRemove
+		beq $s1, 20, finishRemove
 		add $s3, $a0, $s1	# current coord we are looking at
 		
 		lw $s4, gameMatrix($s3)	# load contents of current pixel
@@ -518,23 +513,40 @@ spawnObstacle:
 	
 	bge $t4, 768, endSpawnObstacle
 	
-	addi $t5, $t5, 1	# increase difficulty
-	
 	# RNG for type of obstacle
 	li $v0, 42
 	li $a0, 0
 	li $a1, 30
 	syscall
 	
-	blt $a0, 10, spawnNext1
+	blt $a0, 13, spawnNext1
 	li $a0, 1	# 1 represents standard platform
 	jal spawnPlatform
 	j endSpawn
 	
 	spawnNext1:
 		blt $a0, 9, spawnNext2
+		# spawn standard platform and broken platform below
+		li $a0, 1	# 1 represents standard platform
+		jal spawnPlatform
+		
+		# RNG to spawn broken platform
+		li $v0, 42
+		li $a0, 0
+		li $a1, 64
+		syscall
+		
+		move $s0, $a0
+		mul $s0, $s0, 4		# coord form
+		addi $s0, $s0, 256	# lower bound
+		
+		add $t4, $t4, $s0	# set platform spawn pos
+		
 		li $a0, 3	# 3 represents broken platform
 		jal spawnPlatform
+		
+		mul $s0, $s0, -1
+		add $t4, $t4, $s0	# revert original t4
 		j endSpawn
 	
 	spawnNext2:
@@ -568,11 +580,13 @@ spawnObstacle:
 		li $a0, 0
 		li $a1, 192
 		syscall
-		
-		add $a0, $a0, $t5	# apply difficulty as spacing
+
 		mul $a0, $a0, 4		# coord form
+		add $a0, $a0, $t5	# apply difficulty as spacing
 		addi $t4, $a0, 768	# apply offset for buffer
-		#add $t4, $t4, $t5	# apply general spacing
+		
+		bgt $t5, 712, endSpawnObstacle	# difficulty cap
+		addi $t5, $t5, 4	# increase difficulty
 	
 	endSpawnObstacle:
 		lw $s0, 4($sp)
@@ -588,7 +602,6 @@ scrollWorld:
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
 	
-
 	addi $t4, $t4, -128 	# update scroll timer
 	
 	li $s0, 4864
@@ -806,12 +819,16 @@ drawDoodler:
 	
 	lw $s1, doodlerColor
 	add $s0, $gp, $t0
-	sw $s1, 4($s0)
+	
 	sw $s1, 128($s0)
-	sw $s1, 132($s0)
 	sw $s1, 136($s0)
 	sw $s1, 256($s0)
 	sw $s1, 264($s0)
+	
+	lw $s1, doodlerSecondaryColor
+	sw $s1, 4($s0)
+	sw $s1, 132($s0)
+	
 	
 	lw $s1, 4($sp)
 	lw $s0, ($sp)
