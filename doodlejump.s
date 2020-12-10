@@ -6,139 +6,483 @@
 # Student: Ng Bob Shoaun, 1006568992
 #
 # Bitmap Display Configuration:
-# - Unit width in pixels: 8
-# - Unit height in pixels: 8
-# - Display width in pixels: 256
-# - Display height in pixels: 256
+# - Unit width in pixels: 16
+# - Unit height in pixels: 16
+# - Display width in pixels: 512
+# - Display height in pixels: 512
 # - Base Address for Display: 0x10008000 ($gp)
 #
-# Which milestone is reached in this submission? 1
-# (See the assignment handout for descriptions of the milestones)
-# - Milestone 1/2/3/4/5 (choose the one the applies)
+# Which milestone is reached in this submission?
+# - Milestone 5
 #
 # Which approved additional features have been implemented?
-# (See the assignment handout for the list of additional features)
-# 1. Doodler jump animation
-# 2. Platforms
-# 3. (fill in the feature, if any)
-# ... (add more if necessary)
+# 1. Scoreboard
+# 2. Game over/retry
+# 3. Different levels
+# 4. Dynamic difficulty
+# 5. More platform types
+# 6. Boosting / power-ups
+# 7. Fancier graphics
+# 8. Background music & sound effects
 #
 # Any additional information that the TA needs to know:
-# - (write here, if any)
+# 
 #
 #####################################################################
 .data
-	gameMatrix: .word 0:4608
-	#gameMatrixLength: .word 6144
-	
-	displayMaximum: .word 4096
-	
-	platformsArray: .space 48
-	platformsArrayLength: .word 0
-	spring: .word 0
+	gameMatrix: .word 0:1536
 	sleepDuration: .word 40
-	doodlerColor: .word 0x7FFF90
-	backgroundColor: .word 0xFFDFA8
-	platformColor: .word 0xFF8A33
-	springColor: .word 0x7E7E7E
-	brokenPlatformColor: .word 0x490909
+	
+	doodlerColor: .word 0xEEB1D5
+	doodlerSecondaryColor: .word 0xe58abf
+	backgroundColor: .word 0x43AA8B
+	platformColor: .word 0xF9C74F
+	springColor: .word 0x577590
+	brokenPlatformColor: .word 0xF3722C
 	cloudPlatformColor: .word 0xF0F0F0
+	jetpackColor: .word 0x191923
+	movingPlatformColor: .word 0x22577A
+	jumpMeterColor: .word 0xF94144
+	scoreMeterColor: .word 0x2708A0
+	gameOverTextColor: .word 0x000000
 	
 	doodlerInitialPosition: .word 64
 	doodlerJumpDuration: .word 13	# jump duration in frames
 	springBoostDuration: .word 25	# spring boost duration in frames
-	
-	displayToMatrixOffset: .word 768
-	screenWidth: .word 256
+	jetpackBoostDuration: .word 70
 	
 .text
 main:
-	
 	lw $t0, doodlerInitialPosition  # doodler current position
 	li $t1, 0 			# doodler velocity
 	li $t2, 0			# jump timer
-	lw $t3, screenWidth
-	li $t4, 1536			# next spawn coord / spawn timer
+	li $t3, 0			# game over flag, 1 means game over
+	li $t4, 768			# next spawn coord / spawn timer
 	li $t5, 0			# difficulty / platform spacing	
+	li $t6, -128			# moving platforms move timer
+	li $t7, 0			# background music timer
+	
+	jal playRetrySound
 	
 	li $s0, 0
 	startLoop:
-		beq $s0, 128, gameLoop
-		#jal scrollWorld
-		#jal spawnNewPlatform
+		beq $s0, 32, gameLoop
+		jal scrollWorld
+		jal spawnObstacle
 		jal drawWorld
 		addi $s0, $s0, 1
 		j startLoop
 
 	gameLoop:
+		jal playBackgroundMusic
 		
 		bge $t0, 1536, skipScroll
 		jal scrollWorld
-		jal spawnNewPlatform
+		jal spawnObstacle
 		addi $t0, $t0, 128	# also scroll player
 		
-		
 		skipScroll:
+			jal movePlatforms
+			
+			beq $t3, 1, skipMoveDoodler
+			jal moveDoodler
 		
-		jal moveDoodler
-		jal drawWorld
+		skipMoveDoodler:
+			jal drawWorld
+			jal drawDoodler
+			jal drawJumpMeter
+			jal drawScoreMeter
 		
-		# draw doodler
-		move $a0, $t0
-		lw $a1, doodlerColor
-		jal drawDoodler
-		
-		bgt $t0, 4096, endGameLoop	# doodler reaches bottom of screen
-		
-		jal sleep
-		j gameLoop
+			ble $t0, 4096, contGameLoop	# doodler reaches bottom of screen
+			
+			jal gameOver
+			jal drawGameOverText
+			
+			beq $t3, 1, contGameLoop
+			li $t3, 1		# set gameOver to true
+			jal playGameOverSound
+			
+		contGameLoop:
+			jal sleep
+			j gameLoop
 		
 	endGameLoop:
 		li $v0, 10 # terminate the program gracefully
 		syscall
-
-spawnCloudPlatform:
+		
+gameOver:
+	lw $s0, 0xffff0000
+	beq $s0, 1, gameOverInput
+	jr $ra
+	
+	gameOverInput:
+	 	lw $s1, 0xffff0004
+		beq $s1, 0x72, rPressed
+		beq $s1, 0x71, qPressed
+		jr $ra
+	
+	rPressed:
+		j main
+	
+	qPressed:
+		li $v0, 10 # terminate the program gracefully
+		syscall
+		
+drawGameOverText:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	lw $s0, gameOverTextColor
+	addi $s1, $gp, 1960
+	
+	# o
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 128($s1)
+	sw $s0, 136($s1)
+	sw $s0, 256($s1)
+	sw $s0, 260($s1)
+	sw $s0, 264($s1)
+	
+	addi $s1, $s1, 16
+	
+	# o
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 128($s1)
+	sw $s0, 136($s1)
+	sw $s0, 256($s1)
+	sw $s0, 260($s1)
+	sw $s0, 264($s1)
+	
+	addi $s1, $s1, 16
+	
+	# f
+	sw $s0, -252($s1)
+	sw $s0, -248($s1)
+	sw $s0, -124($s1)
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 132($s1)
+	sw $s0, 260($s1)
+	
+	addi $s1, $s1, 1380
+	
+	# r
+	sw $s0, 0($s1)
+	sw $s0, 4($s1)
+	sw $s0, 128($s1)
+	sw $s0, 256($s1)
+	
+	addi $s1, $s1, 16
+	
+	# |
+	sw $s0, -128($s1)
+	sw $s0, 0($s1)
+	sw $s0, 128($s1)
+	sw $s0, 256($s1)
+	sw $s0, 384($s1)
+	
+	addi $s1, $s1, 12
+	
+	# q
+	sw $s0, 4($s1)
+	sw $s0, 8($s1)
+	sw $s0, 128($s1)
+	sw $s0, 136($s1)
+	sw $s0, 260($s1)
+	sw $s0, 264($s1)
+	sw $s0, 392($s1)
+	sw $s0, 520($s1)
+	sw $s0, 524($s1)
+	
+	lw $s2, 8($sp)
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 12
+	jr $ra
+	
+playBackgroundMusic:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	
-	li $s1, 4	# 4 represents broken platform
-	move $s0, $t4
-	sw $s1, gameMatrix($s0) # spawn platform
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
+	li $s1, 16
+	div $t7, $s1
+	mfhi $s0
+	bne $s0, 0, endPlayBgMusic
+	
+	li $v0, 42
+	li $a0, 0
+	li $a1, 10
+	syscall
+	
+	addi $a0, $a0, 60	# pitch
+
+	li $a1, 3000	# duration
+	li $a2, 0	# instrument
+	li $a3, 20	# volume
+	li $v0, 31
+	syscall
+	
+	endPlayBgMusic:
+	addi $t7, $t7, 1
 	
 	lw $s1, 4($sp)
 	lw $s0, ($sp)
 	addi $sp, $sp, 8
 	jr $ra
 	
-spawnBrokenPlatform:	
+playGameOverSound:
+	li $a0, 80	# pitch
+	li $a1, 2000	# duration
+	li $a2, 127	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playRetrySound:
+	li $a0, 80	# pitch
+	li $a1, 1500	# duration
+	li $a2, 125	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playJumpSound:
+	li $a0, 100	# pitch
+	li $a1, 1000	# duration
+	li $a2, 121	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playSpringSound:
+	li $a0, 75	# pitch
+	li $a1, 1000	# duration
+	li $a2, 123	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playCloudSound:
+	li $a0, 75	# pitch
+	li $a1, 1000	# duration
+	li $a2, 126	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+
+playJetpackSound:
+	li $a0, 50	# pitch
+	li $a1, 10000	# duration
+	li $a2, 123	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+
+playBrokenSound:
+	li $a0, 60	# pitch
+	li $a1, 1000	# duration
+	li $a2, 121	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+movePlatforms:
+	addi $sp, $sp, -4
+	sw $ra, ($sp)
+	blt $t6, 128, contMovePlatforms
+	li $t6, -128
+	
+	contMovePlatforms:
+		blt $t6, 0, moveRight
+		jal movePlatsLeft
+		j endMovePlatforms
+		
+	moveRight:
+		jal movePlatsRight
+	
+	endMovePlatforms:
+		lw $ra, ($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
+movePlatsRight:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	addi $t6, $t6, 4
+	
+	li $s0, 4864
+	loopMovePlatsRight:
+		beq $s0, 764, endMovePlatsRight
+		lw $s1, gameMatrix($s0)
+		bne $s1, 6, contMovePlatsRight
+		
+		addi $s2, $s0, 4
+		sw $zero, gameMatrix($s0)
+		sw $s1, gameMatrix($s2)
+		
+		contMovePlatsRight:
+			addi $s0, $s0, -4
+			j loopMovePlatsRight
+	
+	endMovePlatsRight:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
+		
+movePlatsLeft:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	addi $t6, $t6, 4
+	
+	li $s0, 768
+	loopMovePlatsLeft:
+		beq $s0, 4864, endMovePlatsLeft
+		lw $s1, gameMatrix($s0)
+		bne $s1, 6, contMovePlatsLeft
+		
+		addi $s2, $s0, -4
+		sw $zero, gameMatrix($s0)
+		sw $s1, gameMatrix($s2)
+		
+		contMovePlatsLeft:
+			addi $s0, $s0, 4
+			j loopMovePlatsLeft
+	
+	endMovePlatsLeft:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
+		
+drawScoreMeter:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	lw $s2, scoreMeterColor
+	div $s0, $t5, 24
+	
+	drawScoreMeterLoop:
+		beq $s0, 0, endDrawScoreMeter
+		
+		mul $s1, $s0, -128
+		add $s1, $s1, $gp
+		
+		add $s2, $s2, -5	# gradient
+		sw $s2, 3972($s1)
+		
+		addi $s0, $s0, -1
+		j drawScoreMeterLoop
+	
+	endDrawScoreMeter:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
+
+drawJumpMeter:
+	addi $sp, $sp, -12
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	sw $s2, 8($sp)
+	
+	lw $s2, jumpMeterColor
+	
+	div $s0, $t2, 3
+	drawJumpMeterLoop:
+		beq $s0, 0, endDrawJumpMeter
+		
+		mul $s1, $s0, -128
+		add $s1, $s1, $gp
+		
+		add $s2, $s2, 5	# gradient
+		sw $s2, 4088($s1)
+		
+		addi $s0, $s0, -1
+		j drawJumpMeterLoop
+	
+	endDrawJumpMeter:
+		lw $s2, 8($sp)
+		lw $s1, 4($sp)
+		lw $s0, ($sp)
+		addi $sp, $sp, 12
+		jr $ra
+		
+spawnJetpack:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	
-	li $s1, 3	# 3 represents broken platform
-	move $s0, $t4
-	sw $s1, gameMatrix($s0) # spawn platform
-	addi $s0, $s0, 4
+	li $s1, 5	# 5 represents jetpack
+	addi $s0, $t4, -128
 	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
+	addi $s0, $s0, -128
 	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
+	addi $s0, $s0, -128
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 132
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, 132
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, -128
+	sw $s1, gameMatrix($s0)
+	addi $s0, $s0, -128
 	sw $s1, gameMatrix($s0)
 	
 	lw $s1, 4($sp)
 	lw $s0, ($sp)
 	addi $sp, $sp, 8
+	jr $ra
+
+
+# a0 platform type
+spawnPlatform:
+	addi $sp, $sp, -4
+	sw $s0, ($sp)
+
+	move $s0, $t4
+	sw $a0, gameMatrix($s0) # spawn platform
+	addi $s0, $s0, 4
+	sw $a0, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $a0, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $a0, gameMatrix($s0)
+	addi $s0, $s0, 4
+	sw $a0, gameMatrix($s0)
+
+	lw $s0, ($sp)
+	addi $sp, $sp, 4
 	jr $ra
 
 # $a0 random position on platform
-spawnSpringPlatform:
+spawnSpring:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
@@ -154,27 +498,7 @@ spawnSpringPlatform:
 	lw $s0, ($sp)
 	addi $sp, $sp, 8
 	jr $ra
-	
-# $t4 position
-spawnStandardPlatform:
-	addi $sp, $sp, -8
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	
-	li $s1, 1	# 1 represents standard platform
-	move $s0, $t4
-	sw $s1, gameMatrix($s0) # spawn platform
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	addi $s0, $s0, 4
-	sw $s1, gameMatrix($s0)
-	
-	lw $s1, 4($sp)
-	lw $s0, ($sp)
-	addi $sp, $sp, 8
-	jr $ra
+
 	
 # $a0 reference in game matrix coord
 removePlatform:
@@ -185,10 +509,10 @@ removePlatform:
 	sw $s3, 12($sp)
 	
 	lw $s0, gameMatrix($a0)	# load reference pixel to know which platform it is
-	li $s1, -12	# iterate all possibilities of a 4 wide platform
+	li $s1, -16	# iterate all possibilities of a 4 wide platform
 	
 	removeLoop:
-		beq $s1, 16, finishRemove
+		beq $s1, 20, finishRemove
 		add $s3, $a0, $s1	# current coord we are looking at
 		
 		lw $s4, gameMatrix($s3)	# load contents of current pixel
@@ -207,53 +531,89 @@ removePlatform:
 		addi $sp, $sp, 16
 		jr $ra
 		
-spawnNewPlatform:
+spawnObstacle:
 	addi $sp, $sp, -8
 	sw $ra, ($sp)
 	sw $s0, 4($sp)
 	
-	bge $t4, 768, endSpawnNewPlat
-	
-	addi $t5, $t5, 4	# increase difficulty
+	bge $t4, 768, endSpawnObstacle
 	
 	# RNG for type of obstacle
 	li $v0, 42
 	li $a0, 0
-	li $a1, 50
+	li $a1, 30
 	syscall
 	
-	blt $a0, 20, spawnNext1
-	jal spawnStandardPlatform
+	blt $a0, 13, spawnNext1
+	li $a0, 1	# 1 represents standard platform
+	jal spawnPlatform
 	j endSpawn
 	
 	spawnNext1:
-	blt $a0, 15, spawnNext2
-	jal spawnBrokenPlatform
-	j endSpawn
+		blt $a0, 9, spawnNext2
+		# spawn standard platform and broken platform below
+		li $a0, 1	# 1 represents standard platform
+		jal spawnPlatform
+		
+		# RNG to spawn broken platform
+		li $v0, 42
+		li $a0, 0
+		li $a1, 64
+		syscall
+		
+		move $s0, $a0
+		mul $s0, $s0, 4		# coord form
+		addi $s0, $s0, 256	# lower bound
+		
+		add $t4, $t4, $s0	# set platform spawn pos
+		
+		li $a0, 3	# 3 represents broken platform
+		jal spawnPlatform
+		
+		mul $s0, $s0, -1
+		add $t4, $t4, $s0	# revert original t4
+		j endSpawn
 	
 	spawnNext2:
-	blt $a0, 4, spawnNext3
-	jal spawnCloudPlatform
-	j endSpawn
+		blt $a0, 6, spawnNext3
+		li $a0, 4	# 4 represents cloud platform
+		jal spawnPlatform
+		j endSpawn
 	
 	spawnNext3:
-	jal spawnStandardPlatform
-	jal spawnSpringPlatform
-	j endSpawn
+		blt $a0, 5, spawnNext4
+		li $a0, 6	# 6 represents moving platform
+		jal spawnPlatform
+		j endSpawn
+	
+	spawnNext4:
+		blt $a0, 4, spawnNext5
+		li $a0, 1	
+		jal spawnPlatform
+		jal spawnJetpack
+		j endSpawn
+		
+	spawnNext5:
+		li $a0, 1	
+		jal spawnPlatform
+		jal spawnSpring
+		j endSpawn
 	
 	endSpawn:
+		# RNG for next platform
+		li $v0, 42
+		li $a0, 0
+		li $a1, 192
+		syscall
+
+		mul $a0, $a0, 4		# coord form
+		add $a0, $a0, $t5	# apply difficulty as spacing
+		addi $t4, $a0, 768	# apply offset for buffer
+		
+		bgt $t5, 712, endSpawnObstacle	# difficulty cap
+		addi $t5, $t5, 4	# increase difficulty
 	
-	# RNG for next platform
-	li $v0, 42
-	li $a0, 0
-	li $a1, 192
-	syscall
-	
-	mul $a0, $a0, 4		# coord form
-	addi $t4, $a0, 768	# apply offset for buffer
-	add $t4, $t4, $t5	# apply general spacing
-	
-	endSpawnNewPlat:
+	endSpawnObstacle:
 		lw $s0, 4($sp)
 		lw $ra, ($sp)
 		addi $sp, $sp, 8
@@ -266,8 +626,8 @@ scrollWorld:
 	sw $s1, 8($sp)
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
-
-	addi $t4, $t4, -256 	# update scroll timer
+	
+	addi $t4, $t4, -128 	# update scroll timer
 	
 	li $s0, 18172 
 	scroll:
@@ -308,10 +668,14 @@ drawWorld:
 		beq $s1, 2, dSpring
 		beq $s1, 3, dBrokenPlatform
 		beq $s1, 4, dCloudPlatform
+		beq $s1, 5, dJetpack
+		beq $s1, 6, dMovingPlatform
 		j contDrawLoop
 		
 	dBackground:
 		lw $s3, backgroundColor
+		div $s1, $s0, 40	# gradient
+		add $s3, $s3, $s1
 		j contDrawLoop
 		
 	dPlatform:
@@ -328,6 +692,14 @@ drawWorld:
 		
 	dCloudPlatform:
 		lw $s3, cloudPlatformColor
+		j contDrawLoop
+	
+	dJetpack:
+		lw $s3, jetpackColor
+		j contDrawLoop
+		
+	dMovingPlatform:
+		lw $s3, movingPlatformColor
 		j contDrawLoop
 	
 	contDrawLoop:
@@ -389,6 +761,8 @@ checkDoodlerCollision:
 		beq $s2, 2, springCollision
 		beq $s2, 3, brokenPlatformCollision
 		beq $s2, 4, cloudPlatformCollision
+		beq $s2, 5, jetpackCollision
+		beq $s2, 6, standardPlatformCollision
 
 		addi $s3, $s3, 4	# increase iterator
 		j checkCollisions
@@ -396,17 +770,20 @@ checkDoodlerCollision:
 	standardPlatformCollision:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, doodlerJumpDuration	# start jump
+		jal playJumpSound
 		j endCheckCollisions
 	
 	springCollision:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, springBoostDuration	# start jump with higher duration
+		jal playSpringSound
 		j endCheckCollisions
 		
 	brokenPlatformCollision:
 		# remove broken platform
 		move $a0, $s1
 		jal removePlatform
+		jal playBrokenSound
 		j endCheckCollisions
 	
 	cloudPlatformCollision:
@@ -415,8 +792,14 @@ checkDoodlerCollision:
 		# remove cloud platform
 		move $a0, $s1
 		jal removePlatform
+		jal playCloudSound
 		j endCheckCollisions
-	
+		
+	jetpackCollision:
+		lw $t2, jetpackBoostDuration
+		jal playJetpackSound
+		j endCheckCollisions
+
 	endCheckCollisions:
 		lw $ra, 16($sp)
 		lw $s3, 12($sp)
@@ -455,44 +838,28 @@ checkKeyboardInput:
 		addi $sp, $sp, 8
 		jr $ra
 	
-
-# Draw doodler at $a0 position with $a1 color
 drawDoodler:
-	addi $sp, $sp, -4
-	sw $s0, ($sp)
-	
-	add $s0, $gp, $a0
-	sw $a1, 4($s0)
-	sw $a1, 128($s0)
-	sw $a1, 132($s0)
-	sw $a1, 136($s0)
-	sw $a1, 256($s0)
-	sw $a1, 264($s0)
-	
-	lw $s0, ($sp)
-	addi $sp, $sp, 4
-	jr $ra
-
-# Draw background with $a0 color
-drawBackground:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
 	sw $s1, 4($sp)
 	
-	li $s0, 0
-	bgDrawLoop:
-		beq $s0, 4096, endBgDraw
-		add $s1, $s0, $gp
-		sw $a0, ($s1)
-		
-		addi $s0, $s0, 4
-		j bgDrawLoop
+	lw $s1, doodlerColor
+	add $s0, $gp, $t0
 	
-	endBgDraw:
-		lw $s1, 4($sp)
-		lw $s0, ($sp)
-		addi $sp, $sp, 8
-		jr $ra
+	sw $s1, 128($s0)
+	sw $s1, 136($s0)
+	sw $s1, 256($s0)
+	sw $s1, 264($s0)
+	
+	lw $s1, doodlerSecondaryColor
+	sw $s1, 4($s0)
+	sw $s1, 132($s0)
+	
+	
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
 		
 sleep:	
 	li $v0, 32
