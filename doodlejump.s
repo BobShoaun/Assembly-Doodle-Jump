@@ -12,16 +12,17 @@
 # - Display height in pixels: 512
 # - Base Address for Display: 0x10008000 ($gp)
 #
-# Which milestone is reached in this submission? 1
-# (See the assignment handout for descriptions of the milestones)
-# - Milestone 1/2/3/4/5 (choose the one the applies)
+# Which milestone is reached in this submission?
+# - Milestone 5
 #
 # Which approved additional features have been implemented?
-# (See the assignment handout for the list of additional features)
-# 1. Doodler jump animation
-# 2. Platforms
-# 3. (fill in the feature, if any)
-# ... (add more if necessary)
+# 1. Scoreboard
+# 2. Game over/retry
+# 3. Different levels
+# 4. Dynamic difficulty
+# 5. More platform types
+# 6. Boosting / power-ups
+# 7. Fancier graphics
 #
 # Any additional information that the TA needs to know:
 # - (write here, if any)
@@ -65,21 +66,23 @@ main:
 	li $t4, 768			# next spawn coord / spawn timer
 	li $t5, 0			# difficulty / platform spacing	
 	li $t6, -128			# moving platforms move timer
+	li $t7, 0			# background music timer
 	
 	li $s0, 0
 	startLoop:
 		beq $s0, 32, gameLoop
 		jal scrollWorld
-		jal spawnNewPlatform
+		jal spawnObstacle
 		jal drawWorld
 		addi $s0, $s0, 1
 		j startLoop
 
 	gameLoop:
+		jal playBackgroundMusic
 		
 		bge $t0, 1536, skipScroll
 		jal scrollWorld
-		jal spawnNewPlatform
+		jal spawnObstacle
 		addi $t0, $t0, 128	# also scroll player
 		
 		skipScroll:
@@ -204,6 +207,82 @@ drawGameOverText:
 	addi $sp, $sp, 12
 	jr $ra
 	
+playBackgroundMusic:
+	addi $sp, $sp, -8
+	sw $s0, ($sp)
+	sw $s1, 4($sp)
+	
+	li $s1, 16
+	div $t7, $s1
+	mfhi $s0
+	bne $s0, 0, endPlayBgMusic
+	
+	li $v0, 42
+	li $a0, 0
+	li $a1, 10
+	syscall
+	
+	addi $a0, $a0, 60	# pitch
+
+	li $a1, 3000	# duration
+	li $a2, 0	# instrument
+	li $a3, 40	# volume
+	li $v0, 31
+	syscall
+	
+	endPlayBgMusic:
+	addi $t7, $t7, 1
+	
+	lw $s1, 4($sp)
+	lw $s0, ($sp)
+	addi $sp, $sp, 8
+	jr $ra
+	
+playJumpSound:
+	li $a0, 100	# pitch
+	li $a1, 1000	# duration
+	li $a2, 121	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playSpringSound:
+	li $a0, 75	# pitch
+	li $a1, 1000	# duration
+	li $a2, 123	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
+playCloudSound:
+	li $a0, 75	# pitch
+	li $a1, 1000	# duration
+	li $a2, 126	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+
+playJetpackSound:
+	li $a0, 50	# pitch
+	li $a1, 10000	# duration
+	li $a2, 123	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+
+playBrokenSound:
+	li $a0, 60	# pitch
+	li $a1, 1000	# duration
+	li $a2, 121	# instrument
+	li $a3, 64	# volume
+	li $v0, 31
+	syscall
+	jr $ra
+	
 movePlatforms:
 	addi $sp, $sp, -4
 	sw $ra, ($sp)
@@ -233,7 +312,7 @@ movePlatsRight:
 	
 	li $s0, 4864
 	loopMovePlatsRight:
-		beq $s0, 768, endMovePlatsRight
+		beq $s0, 764, endMovePlatsRight
 		lw $s1, gameMatrix($s0)
 		bne $s1, 6, contMovePlatsRight
 		
@@ -432,12 +511,12 @@ removePlatform:
 		addi $sp, $sp, 16
 		jr $ra
 		
-spawnNewPlatform:
+spawnObstacle:
 	addi $sp, $sp, -8
 	sw $ra, ($sp)
 	sw $s0, 4($sp)
 	
-	bge $t4, 768, endSpawnNewPlat
+	bge $t4, 768, endSpawnObstacle
 	
 	addi $t5, $t5, 1	# increase difficulty
 	
@@ -453,19 +532,19 @@ spawnNewPlatform:
 	j endSpawn
 	
 	spawnNext1:
-		blt $a0, 10, spawnNext2
+		blt $a0, 9, spawnNext2
 		li $a0, 3	# 3 represents broken platform
 		jal spawnPlatform
 		j endSpawn
 	
 	spawnNext2:
-		blt $a0, 10, spawnNext3
+		blt $a0, 6, spawnNext3
 		li $a0, 4	# 4 represents cloud platform
 		jal spawnPlatform
 		j endSpawn
 	
 	spawnNext3:
-		blt $a0, 4, spawnNext4
+		blt $a0, 5, spawnNext4
 		li $a0, 6	# 6 represents moving platform
 		jal spawnPlatform
 		j endSpawn
@@ -495,7 +574,7 @@ spawnNewPlatform:
 		addi $t4, $a0, 768	# apply offset for buffer
 		#add $t4, $t4, $t5	# apply general spacing
 	
-	endSpawnNewPlat:
+	endSpawnObstacle:
 		lw $s0, 4($sp)
 		lw $ra, ($sp)
 		addi $sp, $sp, 8
@@ -652,17 +731,20 @@ checkDoodlerCollision:
 	standardPlatformCollision:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, doodlerJumpDuration	# start jump
+		jal playJumpSound
 		j endCheckCollisions
 	
 	springCollision:
 		addi $t1, $t1, -128		# cancel gravity
 		lw $t2, springBoostDuration	# start jump with higher duration
+		jal playSpringSound
 		j endCheckCollisions
 		
 	brokenPlatformCollision:
 		# remove broken platform
 		move $a0, $s1
 		jal removePlatform
+		jal playBrokenSound
 		j endCheckCollisions
 	
 	cloudPlatformCollision:
@@ -671,10 +753,12 @@ checkDoodlerCollision:
 		# remove cloud platform
 		move $a0, $s1
 		jal removePlatform
+		jal playCloudSound
 		j endCheckCollisions
 		
 	jetpackCollision:
 		lw $t2, jetpackBoostDuration
+		jal playJetpackSound
 		j endCheckCollisions
 
 	endCheckCollisions:
@@ -715,8 +799,6 @@ checkKeyboardInput:
 		addi $sp, $sp, 8
 		jr $ra
 	
-
-# Draw doodler at $a0 position with $a1 color
 drawDoodler:
 	addi $sp, $sp, -8
 	sw $s0, ($sp)
@@ -735,27 +817,6 @@ drawDoodler:
 	lw $s0, ($sp)
 	addi $sp, $sp, 8
 	jr $ra
-
-# Draw background with $a0 color
-drawBackground:
-	addi $sp, $sp, -8
-	sw $s0, ($sp)
-	sw $s1, 4($sp)
-	
-	li $s0, 0
-	bgDrawLoop:
-		beq $s0, 4096, endBgDraw
-		add $s1, $s0, $gp
-		sw $a0, ($s1)
-		
-		addi $s0, $s0, 4
-		j bgDrawLoop
-	
-	endBgDraw:
-		lw $s1, 4($sp)
-		lw $s0, ($sp)
-		addi $sp, $sp, 8
-		jr $ra
 		
 sleep:	
 	li $v0, 32
