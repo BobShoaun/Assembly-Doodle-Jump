@@ -629,11 +629,11 @@ scrollWorld:
 	
 	addi $t4, $t4, -128 	# update scroll timer
 	
-	li $s0, 18172 
+	li $s0, 4864
 	scroll:
 		blt $s0, $zero, endScrollWorld
 		lw $s1, gameMatrix($s0)
-		addi $s2, $s0, 256	# scroll amount
+		addi $s2, $s0, 128	# scroll amount
 		sw $s1, gameMatrix($s2)
 		addi $s0, $s0, -4
 		j scroll
@@ -655,14 +655,13 @@ drawWorld:
 	sw $s2, 12($sp)
 	sw $s3, 16($sp)
 
-	li $s0, 2048
+	li $s0, 0
 	drawLoop:
-		beq $s0, 18176, endDrawWorld
+		beq $s0, 4096, endDrawWorld
 		
-		#addi $s2, $s0, -2048	# display coords by applying offset
+		addi $s2, $s0, 768	# matrix coords by applying offset
+		lw $s1, gameMatrix($s2)	# get value at coords
 		add $s2, $s0, $gp	# get address at coords
-		
-		lw $s1, gameMatrix($s0)	# get value at coords
 		beq $s1, 0, dBackground
 		beq $s1, 1, dPlatform
 		beq $s1, 2, dSpring
@@ -703,7 +702,7 @@ drawWorld:
 		j contDrawLoop
 	
 	contDrawLoop:
-		sw $s3, -2048($s2)
+		sw $s3, ($s2)
 		addi $s0, $s0, 4
 		j drawLoop
 		
