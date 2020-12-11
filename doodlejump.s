@@ -20,13 +20,20 @@
 # 2. Game over/retry
 # 3. Different levels
 # 4. Dynamic difficulty
+#	- platform spacing increases
+#	- capped at a certain point
 # 5. More platform types
+# 	- broken platform
+#	- cloud platform
+#	- moving platform
 # 6. Boosting / power-ups
+#	- Spring
+#	- jetpack
 # 7. Fancier graphics
 # 8. Background music & sound effects
 #
 # Any additional information that the TA needs to know:
-# 
+# - I forgot to mention in my demo that i have also added moving platforms.
 #
 #####################################################################
 .data
